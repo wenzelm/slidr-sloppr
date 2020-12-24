@@ -852,8 +852,9 @@ echo "$(timestamp) Generated $nc clusters"
 # 9) final filtering and consensus construction in R
 #
 echo "$(timestamp) Constructing final consensus SLs ..."
-mkdir -p $outdir/3-results
-Rscript slidr_analyse.R $cand "$outdir/3-results" " $acceptor" $slprefix $threads
+resultsdir=$outdir/3-results-x$tscale-l$tlength-e$evalue-R$rlength-D$donor-S$sm-L$sloop-A$acceptor-O$overlap
+mkdir -p $resultsdir
+Rscript slidr_analyse.R $cand "$resultsdir" " $acceptor" $slprefix $threads
 
 echo "$(timestamp) Finished!"
 exit 0

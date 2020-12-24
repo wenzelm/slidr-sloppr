@@ -1,5 +1,7 @@
 # SLIDR and SLOPPR: Flexible identification of spliced leader *trans*-splicing and prediction of eukaryotic operons from RNA-Seq data
 
+Preprint published at bioRxiv: [https://doi.org/10.1101/2020.12.23.423594](https://doi.org/10.1101/2020.12.23.423594)
+
 ## General options for both pipelines
 
 Both SLIDR and SLOPPR share a number of general options for data input and output, which are described in this first section. Pipeline-specific options are detailed in the following sections.
