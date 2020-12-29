@@ -1,3 +1,5 @@
+#!/usr/bin/env Rscript
+
 library(parallel)
 
 # expect three arguments from command line:

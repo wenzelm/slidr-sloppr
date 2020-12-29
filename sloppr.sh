@@ -269,7 +269,7 @@ if [ ! "$design" == "" ] && ([ ! "$bam" == "" ] || [ ! "$R1" == "" ] || [ ! "$R2
 	echo "WARNING: You have specified a library configuration file. Specified BAM or reads files will be ignored."
 fi
 if [ ! "$design" == "" ]; then
-	while read lib stranded R1 R2 clean bam
+	while IFS='#' read lib stranded R1 R2 clean bam
 	do
 		echo "* Library $lib (-r $stranded) -1 $R1 -2 $R2 $clean $bam"
 		sanity_check
@@ -636,7 +636,7 @@ if [ ! -f $outdir/counts/SL.featureCounts.genes.clean.txt ] || \
    [ ! -f $outdir/counts/bg.featureCounts.genes.clean.txt ] || \
    [ ! -f $outdir/counts/un.featureCounts.genes.clean.txt ]; then
 	echo "$(timestamp) Curating gene annotations ..."	
-	Rscript sloppr_curate_counts.R $outdir/counts $threads 4
+	sloppr_curate_counts.R $outdir/counts $threads 4
 fi
 
 #
@@ -654,8 +654,8 @@ mkdir -p $opdir
 #if [ -f $outdir/operons/operons.gff3 ]; then
 	echo "$(timestamp) Predicting operons ..."	
 
-	Rscript sloppr_predict_operons_full.R $outdir/counts/SL.featureCounts.genes.clean.txt $sls " $sl2s" $slrr $upstream $dist $opp "$agg" $zero $threads $opdir
-	Rscript sloppr_predict_operons_full.R $outdir/counts/SL.featureCounts.exons.clean.txt $sls " $sl2s" $slrr $upstream $dist $opp "$agg" $zero $threads $opdir
+	sloppr_predict_operons_full.R $outdir/counts/SL.featureCounts.genes.clean.txt $sls " $sl2s" $slrr $upstream $dist $opp "$agg" $zero $threads $opdir
+	sloppr_predict_operons_full.R $outdir/counts/SL.featureCounts.exons.clean.txt $sls " $sl2s" $slrr $upstream $dist $opp "$agg" $zero $threads $opdir
 #fi
 
 #

@@ -1,3 +1,5 @@
+#!/usr/bin/env Rscript
+
 # this script is designed to predict operons from a featureCount matrix
 # full functionality is implemented, including graphical output
 

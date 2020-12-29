@@ -1,19 +1,15 @@
 #!/bin/bash
 
-function timestamp { 
-	date +"[%Y-%m-%d %H:%M:%S]"
-}
-
 function load_dependencies {
 	# ensure that all dependencies are in PATH
 	# also add SLIDR installation directory to PATH
-	# export PATH=$PATH:/path/to/bin
-	echo -e "\n$(timestamp) >>> Loading dependencies"
+	# export PATH=$PATH:/path/to/slidr-sloppr
+	echo -e "#\n$(timestamp) >>> Loading dependencies"
 	module load hisat2-2.1.0
 	module load samtools-1.9
 	module load bedtools-2.28.0
 	module load seqtk-1.3
-	module load cdhit-4.8.1
+	#module load cdhit-4.8.1
 	module load vsearch-2.4.3
 	module load blast-2.9.0
 	module load r-data.table
@@ -22,50 +18,56 @@ function load_dependencies {
 	module load gffread-0.11.4
 	module load cutadapt-2.3
 	module load bowtie2-2.3.5
-	export PATH="$PATH:~/sharedscratch/apps/ViennaRNA-2.4.14/bin"
+	export PATH="$PATH:/uoa/home/s02mw5/sharedscratch/apps/ViennaRNA-2.4.14/bin"
+	#export PATH="$PATH:/uoa/home/s02mw5/slidr-sloppr"
+}
+
+function timestamp { 
+	date +"[%Y-%m-%d %H:%M:%S]"
 }
 
 title="#\n# SLIDR - Spliced Leader IDentification from RNA-Seq data\n# Version 1.1\n#"
 
 function printhelp {
 	echo -e "$title"
-	echo -e "Usage: bash slidr.sh -g <> | -t <> [-a <>] {-1 <> [-2 <>] | -b <> | m <>} [-r 0|1|2] [-q]"
-	echo -e "\t\t[-l <>] [-x <>] [-e <>] [-D <>] [-S <>] [-A <>] [-R <>] [-O <>] [-L <>]"
-	echo -e "\t\t[-o <>] [-p <>] [-c <>]"
-	echo -e "Alignment reference:"
-	echo -e '\t-g\tPath to genome assembly (FASTA)'
-	echo -e '\t-a\tPath to genome annotations (GFF/GTF)'
-	echo -e '\t-t\tPath to transcriptome assembly (FASTA)'
-	echo -e "Single library:"
-	echo -e '\t-1\tPath to R1 reads (FASTQ.GZ)'
-	echo -e '\t-2\tPath to R2 reads (FASTQ.GZ)'
-	echo -e '\t-b\tPath to read alignments (BAM)'
-	echo -e '\t-r\tRead strandedness (0=unstranded; 1=stranded; 2=reverse-stranded; x=infer; default: x)'
-	echo -e "\t-q\tQuality-trim 3' ends of reads and remove Illumina adapters"
-	echo -e "Multiple libraries:"
-	echo -e '\t-m\tPath to tab-delimited file describing library configurations:'
-	echo -e '\t\tColumn 1: Library name'
-	echo -e '\t\tColumn 2: Library strandedness (= -r option)'
-	echo -e '\t\tColumn 3: Path to R1 reads (= -1 option)'
-	echo -e '\t\tColumn 4: Path to R2 reads (= -2 option)'
-	echo -e '\t\tColumn 5: "trim" to quality-trim reads (= -q option)'
-	echo -e '\t\tColumn 6: Path to read alignments (= -b option)'
-	echo -e "Tail filtering:"
-	echo -e "\t-l\tMinimum tail length (default: 8)"
-	echo -e "\t-x\tScale factor for upper tail length limit (default: 1.0)"
-	echo -e "\t-e\tBLASTN E-value (default: 1)"
-	echo -e "SL RNA filtering:"
-	echo -e "\t-D\tSplice donor site regex (default: GT)"
-	echo -e "\t-S\tSm binding site regex (default: .{40,55}AT{4,6}G)"
-	echo -e "\t-A\tSplice acceptor site regex (default: AG)"
-	echo -e "\t-R\tMaximum SL RNA length excluding SL (default: 80)"
-	echo -e "\t-O\tMaximum SL overlap with trans-splice acceptor site (default: 10)"
-	echo -e "\t-L\tMaximum base-pair span within stem-loop (default: 35)"
-	echo -e "General:"
-	echo -e '\t-o\tPath to output directory (default: "SLIDR_[date+time]")'
-	echo -e '\t-p\tPrefix for predicted SL sequences (default: SL)'
-	echo -e '\t-c\tThreads (default: all available cores)'
-	echo -e '\t-h\tPrint this help page'
+	echo -e "# Usage: slidr.sh [-o <>] [-p <>] [-c <>] -g <> | -t <> [-a <>]"
+	echo -e "#   \t\t  {-1 <> [-2 <>] | -b <> | -m <>} [-r 0|1|2|x] [-q]"
+	echo -e "#   \t\t  [-l <>] [-x <>] [-e <>] [-D <>] [-S <>] [-A <>] [-R <>] [-O <>] [-L <>]"
+	echo -e "#\n# General options:"
+	echo -e '#    -o <dir>\tPath to output directory (default: "SLIDR_[date+time]")'
+	echo -e '#    -p <chr>\tPrefix for predicted SL sequences (default: SL)'
+	echo -e '#    -c <num>\tThreads (default: all available cores)'
+	echo -e '#    -h\t\tPrint this help page'
+	echo -e "#\n# Reference assembly:"
+	echo -e '#    -g <file>\tPath to genome assembly (FASTA)'
+	echo -e '#    -a <file>\tPath to genome annotations (GFF/GTF)'
+	echo -e '#    -t <file>\tPath to transcriptome assembly (FASTA)'
+	echo -e "#\n# Single RNA-Seq library:"
+	echo -e '#    -1 <file>\tPath to R1 reads (FASTQ.GZ)'
+	echo -e '#    -2 <file>\tPath to R2 reads (FASTQ.GZ)'
+	echo -e '#    -b <file>\tPath to read alignments (BAM)'
+	echo -e '#    -r <num>\tRead strandedness (0=unstranded; 1=stranded; 2=reverse-stranded; x=infer; default: x)'
+	echo -e "#    -q\t\tQuality-trim 3' ends of reads and remove Illumina adapters"
+	echo -e "#\n# Multiple RNA-Seq libraries:"
+	echo -e '#    -m <file>\tPath to tab-delimited file describing library configurations:'
+	echo -e '#   \t\tColumn 1: Library name'
+	echo -e '#   \t\tColumn 2: Library strandedness (= -r option)'
+	echo -e '#   \t\tColumn 3: Path to R1 reads (= -1 option)'
+	echo -e '#   \t\tColumn 4: Path to R2 reads (= -2 option)'
+	echo -e '#   \t\tColumn 5: "trim" to quality-trim reads (= -q option)'
+	echo -e '#   \t\tColumn 6: Path to read alignments (= -b option)'
+	echo -e "#\n# Read tail filtering:"
+	echo -e "#    -l <num>\tMinimum tail length (default: 8)"
+	echo -e "#    -x <num>\tScale factor for upper tail length limit (default: 1.0)"
+	echo -e "#    -e <num>\tBLASTN E-value (default: 1)"
+	echo -e "#\n# SL RNA filtering:"
+	echo -e "#    -D <chr>\tSplice donor site regex (default: GT)"
+	echo -e "#    -S <chr>\tSm binding site regex (default: .{20,60}AT{4,6}G)"
+	echo -e "#    -A <chr>\tSplice acceptor site regex (default: AG)"
+	echo -e "#    -R <num>\tMaximum SL RNA length excluding SL (default: 80)"
+	echo -e "#    -O <num>\tMaximum SL overlap with trans-splice acceptor site (default: 10)"
+	echo -e "#    -L <num>\tMaximum base-pair span within stem-loop (default: 25)"
+	echo -e "#"
 }
 
 #
@@ -88,7 +90,7 @@ tlength=8
 tscale=1.0
 evalue=1
 donor="GT"
-sm=".{40,55}AT{4,6}G"
+sm=".{20,60}AT{4,6}G"
 acceptor="AG"
 rlength=80
 overlap=10
@@ -175,37 +177,69 @@ done
 # print input summary on screen and log file
 function print_summary {
 	echo -e "$title"
-	echo -e "---------------- General"
-	printf "%24s %s\n" "Output directory:" $outdir
-	printf "%24s %s\n" "SL prefix:" $slprefix
-	printf "%24s %s\n" "Threads:" $threads	
-	echo -e "\n-------------- Reference"
-	printf "%24s %s\n" "Genome:" $genome
-	printf "%24s %s\n" "Annotations:" $ann
-	printf "%24s %s\n" "Transcriptome:" $transcriptome
-	echo -e "\n--------- Tail filtering"
-	printf "%24s %s\n" "Min. length (bp):" $tlength
-	printf "%24s %s\n" "Max. length (scale):" $tscale
-	printf "%24s %s\n" "BLASTN E-value:" $evalue
-	echo -e "\n------- SL RNA filtering"
-	printf "%24s %s\n" "Splice donor site:" $donor
-	printf "%24s %s\n" "Sm binding site:" $sm
-	printf "%24s %s\n" "Splice acceptor site:" $acceptor
-	printf "%24s %s\n" "Max. SL RNA length:" $rlength
-	printf "%24s %s\n" "Max. acceptor overlap:" $overlap
-	printf "%24s %s\n" "Max. stem-loop span:" $sloop
-	echo -e "\n----------- RNA-Seq data"
+	echo -e "------------------- General"
+	printf "%27s %s\n" "Output directory:" $outdir
+	printf "%27s %s\n" "SL name prefix:" $slprefix
+	printf "%27s %s\n" "Threads:" $threads	
+	echo -e "\n----------------- Reference"
+	printf "%27s %s\n" "Genome:" $genome
+	printf "%27s %s\n" "Annotations:" $ann
+	printf "%27s %s\n" "Transcriptome:" $transcriptome
+	echo -e "\n-------- Read tail filtering"
+	printf "%27s %s\n" "Minimum length (bp):" $tlength
+	printf "%27s %s\n" "Maximum length (scale):" $tscale
+	printf "%27s %s\n" "BLASTN E-value:" $evalue
+	echo -e "\n---------- SL RNA filtering"
+	printf "%27s %s\n" "Splice donor site:" $donor
+	printf "%27s %s\n" "Sm binding site:" $sm
+	printf "%27s %s\n" "Splice acceptor site:" $acceptor
+	printf "%27s %s\n" "Maximum SL RNA length:" $rlength
+	printf "%27s %s\n" "Maximum acceptor overlap:" $overlap
+	printf "%27s %s\n" "Maximum stem-loop span:" $sloop
+	echo -e "\n-------------- RNA-Seq data"
 	if [ ! "$design" == "" ] ; then
-		printf "%24s %s\n" "Libraries:" $design
+		printf "%27s %s\n" "Libraries:" $design
 	else
-		printf "%24s %s\n" "R1 reads:" $R1
-		printf "%24s %s\n" "R2 reads:" $R2
-		printf "%24s %s\n" "Quality trimming:" $clean
-		printf "%24s %s\n" "BAM alignments:" $bam
-		printf "%24s %s\n" "Strandedness:" $stranded
+		printf "%27s %s\n" "R1 reads:" $R1
+		printf "%27s %s\n" "R2 reads:" $R2
+		printf "%27s %s\n" "Quality trimming:" $clean
+		printf "%27s %s\n" "BAM alignments:" $bam
+		printf "%27s %s\n" "Strandedness:" $stranded
 	fi
 }
-print_summary
+function print_summary2 {
+	echo -e "$title"
+	echo -e "# General:"
+	echo -e "#   > Output directory\t $outdir"
+	echo -e "#   > SL name prefix\t $slprefix"
+	echo -e "#   > Threads\t\t $threads"
+	echo -e "#\n# Reference:"
+	echo -e "#   > Genome\t\t $genome"
+	echo -e "#   > Annotations\t $ann"
+	echo -e "#   > Transcriptome\t $transcriptome"
+	echo -e "#\n# Read tail filtering:"
+	echo -e "#   > Minimum length\t $tlength"
+	echo -e "#   > Maximum length\t $tscale"
+	echo -e "#   > BLASTN E-value\t $evalue"
+	echo -e "#\n# SL RNA filtering:"
+	echo -e "#   > Splice donor\t $donor"
+	echo -e "#   > Sm binding site\t $sm"
+	echo -e "#   > Splice acceptor\t $acceptor"
+	echo -e "#   > SL RNA length\t $rlength"
+	echo -e "#   > Acceptor overlap\t $overlap"
+	echo -e "#   > Stem-loop span\t $sloop"
+	echo -e "#\n# RNA-Seq data:"
+	if [ ! "$design" == "" ] ; then
+		echo -e  "#   > Libraries\t\t $design"
+	else
+		echo -e  "#   > R1 reads\t\t $R1"
+		echo -e  "#   > R2 reads\t\t $R2"
+		echo -e  "#   > Quality trimming\t $clean"
+		echo -e  "#   > BAM alignments\t $bam"
+		echo -e  "#   > Strandedness\t $stranded"
+	fi
+}
+print_summary2
 
 # sanity check input
 function sanity_check {
@@ -277,7 +311,7 @@ fi
 if [ ! "$design" == "" ]; then
 	while IFS='#' read lib stranded R1 R2 clean bam
 	do
-		echo "* Library $lib (-r $stranded) -1 $R1 -2 $R2 -q $clean -b $bam"
+		echo "#   * Library $lib (-r $stranded) -1 $R1 -2 $R2 $clean $bam"
 		sanity_check
 	done < <(tr -d '#' < $design | tr '\t' '#' )
 fi
@@ -325,10 +359,10 @@ fi
 if [ ! "$transcriptome" == "" ] && [ ! -d $outdir/bowtie2_index ]; then
 	mkdir -p $outdir/bowtie2_index
 	# remove redundant transcripts
-	echo "$(timestamp) Removing redundant transcripts ..."
-	cd-hit-est -M 0 -c 1.0 -T $threads -i $transcriptome -o $outdir/transcriptome.cdhit \
-		> $outdir/bowtie2_index/log_cd-hit-est.txt 2>&1
-	transcriptome=$outdir/transcriptome.cdhit
+	#echo "$(timestamp) Removing redundant transcripts ..."
+	#cd-hit-est -M 0 -c 1.0 -T $threads -i $transcriptome -o $outdir/transcriptome.cdhit \
+	#	> $outdir/bowtie2_index/log_cd-hit-est.txt 2>&1
+	#transcriptome=$outdir/transcriptome.cdhit
 	# make index
 	echo "$(timestamp) Generating BOWTIE2 index ..."
 	bowtie2-build --threads $threads \
@@ -342,8 +376,8 @@ fi
 # only when no BAM file was specified!
 
 function trim_reads {
-	trR1=$outdir/$lib/${lib/library_/}.R1.trimmed.fq.gz
-	trR2=$outdir/$lib/${lib/library_/}.R2.trimmed.fq.gz
+	trR1=$outdir/$lib/${lib/1-library_/}.R1.trimmed.fq.gz
+	trR2=$outdir/$lib/${lib/1-library_/}.R2.trimmed.fq.gz
 	if [ "$clean" == "trim" ] && [ ! -f $trR1 ]; then
 		echo "$(timestamp) Trimming adapters and poor-quality bases from reads ..."
 		if [ "$R2" == "" ]; then
@@ -556,7 +590,7 @@ function tail_extract {
 		gzip $bam.tails-3p.sam
 		gzip $bam.tails-3p.fa
 	fi		
-	echo "$(timestamp) Extracted $(zgrep -h '^>' $bam.tails*p.fa.gz | grep -c '^>') tails ..."
+	echo "$(timestamp) Extracted $(zgrep -h '^>' $bam.tails*p.fa.gz | grep -c '^>') tails"
 }
 
 # we need to extract tails for each library
@@ -564,7 +598,7 @@ function tail_extract {
 # for each library, check what needs done
 function library_pipeline {
 	echo "$(timestamp) >>> Processing library $lib"
-		lib="library_$lib"
+		lib="1-library_$lib"
 		mkdir -p $outdir/$lib
 		if [ "$bam" == "" ]; then
 			trim_reads
@@ -594,7 +628,7 @@ mkdir -p $outdir/1-tails
 # collect all tails
 if [ ! -f $outdir/1-tails/tails-x$tscale.fa.gz ]; then
 	echo "$(timestamp) Collecting tails ..."
-	cat $outdir/library_*/alignments-x$tscale.bam.tails*p.fa.gz > $outdir/1-tails/tails-x$tscale.fa.gz
+	cat $outdir/1-library_*/alignments-x$tscale.bam.tails*p.fa.gz > $outdir/1-tails/tails-x$tscale.fa.gz
 fi
 
 # dereplicate 
@@ -717,16 +751,16 @@ if [ ! -f "$spliceout" ]; then
 	
 	# collect read alignments
 	if [ ! -f "$tailbams.tails+5p.bam" ]; then
-		samtools merge -f -@ $threads -O bam $tailbams.tails+5p.bam $outdir/library_*/*x$tscale.bam.tails+5p.sam.gz
+		samtools merge -f -@ $threads -O bam $tailbams.tails+5p.bam $outdir/1-library_*/*x$tscale.bam.tails+5p.sam.gz
 	fi
 	if [ ! -f "$tailbams.tails-3p.bam" ]; then
-		samtools merge -f -@ $threads -O bam $tailbams.tails-3p.bam $outdir/library_*/*x$tscale.bam.tails-3p.sam.gz
+		samtools merge -f -@ $threads -O bam $tailbams.tails-3p.bam $outdir/1-library_*/*x$tscale.bam.tails-3p.sam.gz
 	fi
 	if [ ! -f "$tailbams.tails-5p.bam" ]; then
-		samtools merge -f -@ $threads -O bam $tailbams.tails-5p.bam $outdir/library_*/*x$tscale.bam.tails-5p.sam.gz
+		samtools merge -f -@ $threads -O bam $tailbams.tails-5p.bam $outdir/1-library_*/*x$tscale.bam.tails-5p.sam.gz
 	fi
 	if [ ! -f "$tailbams.tails+3p.bam" ]; then
-		samtools merge -f -@ $threads -O bam $tailbams.tails+3p.bam $outdir/library_*/*x$tscale.bam.tails+3p.sam.gz
+		samtools merge -f -@ $threads -O bam $tailbams.tails+3p.bam $outdir/1-library_*/*x$tscale.bam.tails+3p.sam.gz
 	fi
 	
 	# length of acceptor site (AG: 2bp)
@@ -764,7 +798,7 @@ if [ ! -f "$spliceout" ]; then
 	#gzip $outdir/2-RNA_filters/splice_acceptor_sites_candidates.txt
 	
 	#echo "$(timestamp) Extracted $nasc potential splice acceptor sites ($((100*$nasc/$nas))% of $nas locations)"
-	echo "$(timestamp) Extracted $nasc splice acceptor sites"
+	echo "$(timestamp) Extracted $nas splice acceptor sites"
 fi
 
 #
@@ -854,7 +888,7 @@ echo "$(timestamp) Generated $nc clusters"
 echo "$(timestamp) Constructing final consensus SLs ..."
 resultsdir=$outdir/3-results-x$tscale-l$tlength-e$evalue-R$rlength-D$donor-S$sm-L$sloop-A$acceptor-O$overlap
 mkdir -p $resultsdir
-Rscript slidr_analyse.R $cand "$resultsdir" " $acceptor" $slprefix $threads
+slidr_consensus.R $cand "$resultsdir" " $acceptor" $slprefix $threads
 
 echo "$(timestamp) Finished!"
 exit 0

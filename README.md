@@ -1,6 +1,6 @@
 # SLIDR and SLOPPR: A suite of two pipelines for flexible identification of spliced leader *trans*-splicing and prediction of eukaryotic operons from RNA-Seq data
 
-SLIDR and SLOPPR both identify SLs from 5'-tails of RNA-Seq reads that are soft-clipped after read alignment to a reference genome or transcriptome. SLIDR (Spliced leader identification from RNA-Seq) assembles these read tails into full-length SLs and functional SL RNA genes if a genome assembly is available. SLOPPR searches read tails for a set of known SLs, quantifies SL-containing reads against all genes in the genome and uses SL usage patterns across genes to predict operonic gene organisation. 
+SLIDR and SLOPPR identify SLs from 5'-tails of RNA-Seq reads that are soft-clipped after read alignment to a reference genome or transcriptome. SLIDR (Spliced leader identification from RNA-Seq) assembles these read tails into full-length SLs and functional SL RNA genes if a genome assembly is available. SLOPPR searches read tails for a set of known SLs, quantifies SL-containing reads against all genes in the genome and uses SL usage patterns across genes to predict operons. 
 
 Full descriptions of the implementation are detailed in the preprint published at bioRxiv: [https://doi.org/10.1101/2020.12.23.423594](https://doi.org/10.1101/2020.12.23.423594)
 
@@ -87,13 +87,13 @@ supplying the genome assembly (`-g`), the genome annotations (`-a`), the output 
 
     >Cel-SL2
 
-The on-screen SLIDR output should only list the expected SL1 and SL2 sequences:
+The on-screen SLIDR output will consist of the expected SL1 and SL2 sequences, assembled from 22-19 reads, encoded by 1-10 SL RNA genes and spliced to 12-14 genes:
 
-                    Sequence Reads SL_Genes Spliced_Genes
+                    Sequence Reads SL_RNA_Genes SLTS_Genes
       ggttTAATTACCCAAGTTTGAG    29       10            14
      GGTTTTAACCCAGTTTAACCAAG    22        1            12
 
-The on-screen SLOPPR output should detail low SL-trans-splicing rates and 84 predicted operons using SL2 as a polycistron resolver:
+The on-screen SLOPPR output will detail low SL-trans-splicing rates and 84 predicted operons using SL2 as a polycistron resolver:
 
     Numbers of genes receiving SLs:
          not expressed  6386 32.26 %
@@ -168,7 +168,7 @@ Example file generated for the example dataset above:
 Leave columns empty if they are not required, for example:
 
     Library1 <tab> x <tab> R1.trimmed.fq.gz <tab> R2.trimmed.fq.gz
-    Library2 <tab> 0 <tab> reads.fq.gz <tab> <tab> trim
+    Library2 <tab> 0 <tab> single_end.reads.fq.gz <tab> <tab> trim
     Library3 <tab> 2 <tab> <tab> <tab> <tab> alignments.bam
 
 This configuration file allows great flexibility in mixing single-end and paired-end libraries with different strandedness and existing read alignments.
@@ -244,12 +244,20 @@ Maximum base-pair span within stem-loop (default: 35). This parameter controls s
 Prefix for predicted SL sequences (default: SL). Output files will use this prefix for naming the SLs. 
 
 <a name="slidroutput"></a>
-#### Outputs:
+#### Output files:
 
-- Summary of identified SL sequences, read coverage, numbers of SL RNA genes and numbers of SL *trans*-spliced genes
-- Summary of secondary structure statistics for SL RNA genes (numbers of stem loops, structure stability statistics)
-- SL sequences in FASTA format
-- SL RNA genes in FASTA and GFF3 format
+Final results are written to the directory `3-results-[suffix]` inside the specified output directory. The suffix of the directory name summarises the specified parameters to allow for convenient parameter sweeps within the same output directory, for example `slidr_toy_data/3-results-x1.0-l8-e1-R80-DGT-S.{20,60}AT{4,6}G-L25-AAG-O10`
+
+- `SL.tsv`: tab-delimited table summarising SL sequence, read coverage, numbers of SL RNA genes, numbers of SL *trans*-spliced genes, numbers of stem loops and structure stability statistics from [RNAFold](https://www.tbi.univie.ac.at/RNA/RNAfold.1.html) (MFE frequency and ensemble diversity)
+- `raw.tsv`: same as `SL.tsv`, but including singleton SLs (defined by only a single read and/or spliced to only a single gene). Provided for trouble-shooting purposes.
+- `SL.fa`: all SL sequences in FASTA format
+- `SL_RNA_genes.fa`: all SL RNA gene sequences in FASTA format
+- `SL_RNA_genes.gff3`: all SL RNA genes in GFF3 format
+- `SL_RNA_genes/*.RNA_genes.fa`: SL RNA gene sequences (FASTA) for each SL
+- `SL_RNA_genes/*.RNA_genes.gff3`: SL RNA gene sequences (GFF3) for each SL
+- `SL_RNA_genes/*.trans-splice-sites.gff3`: SL *trans*-splice acceptor sites (GFF3) for each SL
+
+Log files and intermediate output files are written to the directories `1-library_[library name]`, `1-tails` and `2-RNA-filters`, representing each main pipeline stage.
 
 <a name="slopprparams"></a>
 ### SLOPPR: Spliced leader-informed operon prediction from RNA-Seq
