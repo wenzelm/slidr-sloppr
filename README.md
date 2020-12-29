@@ -27,7 +27,6 @@ Full descriptions of the implementation are detailed in the preprint published a
     - [SLOPPR](#slopprguidelines)
 - [Citation](#citation)
 
-<a name="installation"></a>
 ## Installation
 
     # clone repository from GitHub
@@ -40,7 +39,6 @@ Full descriptions of the implementation are detailed in the preprint published a
     # add installation directory to PATH
     export PATH=$PATH:path/to/apps/slidr-sloppr
 
-<a name="dependencies"></a>
 ### Dependencies:
 
 - [CUTADAPT](https://cutadapt.readthedocs.io/en/stable/installation.html) (tested v2.3)
