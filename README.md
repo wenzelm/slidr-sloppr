@@ -9,17 +9,19 @@ Full descriptions of the implementation are detailed in the preprint published a
 - [Installation](#installation)
     - [Dependencies](#dependencies)
     - [Quick start](#quickstart)
-- [Command-line options](#options)
+- [Parameter reference](#reference)
     - [General](#general)
     - [RNA-Seq data input](#input)
     - [SLIDR](#slidr)
         - [Reference assembly](#refassembly)
         - [Read tail filtering](#tailfilter)
         - [SL RNA filtering](#rnafilter)
+        - [Output files](#slidroutput)
     - [SLOPPR](#sloppr)
         - [Reference assembly](#refassembly2)
         - [SL screening](#slscreening)
         - [Operon prediction](#operonprediction)
+        - [Output files](#slopproutput)
 - [Guidelines for parameter choice](#guidelines)
     - [SLIDR](#slidrguidelines)
     - [SLOPPR](#slopprguidelines)
@@ -62,6 +64,7 @@ The R packages *data.table*, *glmpca*, *ggplot2*, *ggdendro* and *MASS* are all 
     install.packages("ggdendro")
     install.packages("MASS")
 
+<a name="quickstart"></a>
 ### Quick start with example data
 
 The script `example_data.sh` downloads the *C. elegans* genome assembly GCF_000002985.6 from NCBI, two very small RNA-Seq libraries from ENA (accessions ERR2756729 and ERR2756730) and runs basic SLIDR and SLOPPR analyses. Run this script to test the installation and to familiarise yourself with the workflow. Each analysis completed within ten minutes using 16 threads and 32 GB of memory.
@@ -106,8 +109,10 @@ The on-screen SLOPPR output should detail low SL-trans-splicing rates and 84 pre
 
 Note that the SL-clustering algorithm is unlikely to correctly identify SL1/SL2 clusters with only two ultra-low-coverage replicates. In the above run, the two clusters did not coincide with SL1/SL2 SLs, and the inferred operons are thus incorrect. Due to some degree of stochasticity, your run may produce different clusters and the numbers of genes and operons may be different.
 
+<a name="reference"></a>
 ## Parameter reference
 
+<a name="general"></a>
 ### General options for both pipelines
 
 Both SLIDR and SLOPPR share a number of general options for data input and output, which are described in this first section. Pipeline-specific options are detailed in the following sections.
@@ -122,6 +127,7 @@ Path to output directory. If unspecified, the output directory is "./SLIDR_[date
 `-c <num>`
 Threads (default: all available cores obtained by `nproc`)
 
+<a name="input"></a>
 #### RNA-Seq data input
 SLIDR and SLOPPR accept single-end or paired-end RNA-Seq reads in FASTQ(.gz) format or read alignments in BAM format. The following options are available to specify a single library:
 
@@ -168,8 +174,10 @@ Leave columns empty if they are not required, for example:
 This configuration file allows great flexibility in mixing single-end and paired-end libraries with different strandedness and existing read alignments.
 Note: Avoid `#` characters in the file contents; they will be stripped! 
 
+<a name="slidr"></a>
 ### SLIDR: Spliced leader identification from RNA-Seq
 
+<a name="refassembly"></a>
 #### Reference assembly
 
 SLIDR requires either a genomic or transcriptomic reference assembly. A genomic reference is recommended and will produce vastly superior results. Genome annotations are recommended because they improve read mapping in HISAT2 and allow SLIDR to infer strandedness of the RNA-Seq data if unknown.
@@ -183,6 +191,7 @@ Path to genome annotations in GFF or GTF format.
 `-t <file>`
 Path to transcriptome assembly in FASTA format.
 
+<a name="tailfilter"></a>
 #### Read tail filtering
 
 `-l <num>`
@@ -210,6 +219,7 @@ Modifying the scale factor `-x` can restrict or expand the upper tail length lim
 `-e <num>`
 BLASTN E-value (default: 1). This parameter controls the stringency of the alignment of the read tail cluster centroids against the reference assembly. The default value of 1 is appropriate for centroid lengths as low as 10 bp and should rarely require modifying. Decreasing the value will substantially reduce the numbers of reads passing filteres. Increasing the value will allow shorter centroids to be retained, which we found necessary when analysing the short 16bp SL in *Ciona intestinalis*. Note that increasing this value will substantially increase the numbers of sequence alignments to process.
 
+<a name="rnafilter"></a>
 #### SL RNA filtering
 
 `-D <chr>`
@@ -233,6 +243,7 @@ Maximum base-pair span within stem-loop (default: 35). This parameter controls s
 `-p <chr>`
 Prefix for predicted SL sequences (default: SL). Output files will use this prefix for naming the SLs. 
 
+<a name="slidroutput"></a>
 #### Outputs:
 
 - Summary of identified SL sequences, read coverage, numbers of SL RNA genes and numbers of SL *trans*-spliced genes
@@ -240,8 +251,10 @@ Prefix for predicted SL sequences (default: SL). Output files will use this pref
 - SL sequences in FASTA format
 - SL RNA genes in FASTA and GFF3 format
 
+<a name="sloppr"></a>
 ### SLOPPR: Spliced leader-informed operon prediction from RNA-Seq
 
+<a name="refassembly2"></a>
 #### Reference assembly
 SLOPPR requires a genomic reference assembly and genome annotations in GFF or GTF format.
 
@@ -251,6 +264,7 @@ Path to genome assembly in FASTA format.
 `-a <file>`
 Path to genome annotations in GFF or GTF format.
 
+<a name="slscreening"></a>
 #### SL screening
 
 `-s <file>`
@@ -265,6 +279,7 @@ Maximum error rate for SL tail matching (default: 0.09). The default error rate 
 `-f <chr>`
 Meta-feature ID field in GFF/GTF annotations (default: gene_id). Reads are quantified against gene annotations by default, but some genome annotations may require to set a different meta-feature ID, for example transcript_id. 
 
+<a name="operonprediction"></a>
 #### Operon prediction
 
 `-z [geo|sum|median]`
@@ -291,6 +306,7 @@ Prefix for operon GFF3 annotations (default: OP). It is recommended to follow a 
 `-x <path>`
 Reference operon annotations (GFF/GTF). If at least some operons are known, they can be supplied as GFF/GTF annotations and SLOPPR will compare its predications against these reference operons. Note that the GFF/GTF must contain only a single entry per operon that spans all operonic genes. Do not include "gene" entries for individual operonic genes.
 
+<a name="slopproutput"></a>
 #### Outputs:
 
 - Tabulated SL read counts, SL2:SL1 read ratio, gene class (operonic, monocistronic or not SL trans-spliced) and intergenic distance for each gene in the genome
@@ -301,11 +317,12 @@ Reference operon annotations (GFF/GTF). If at least some operons are known, they
 
 
 
-
+<a name="guidelines"></a>
 ## Guidelines for parameter choice
 
 multiple runs necessary. can reuse output directory because the tools will re-use files if appropriate.
 
+<a name="slidrguidelines"></a>
 ### SLIDR
 
 #### SLs and SL RNAs are entirely uncharacterised in my favourite organism - how do I get started with SLIDR?
@@ -331,12 +348,14 @@ Consider relaxing or disabling nucleotide motif filters to test whether this yie
 
 Note that SLIDR is not designed to find all possible SL RNA genes in a genome. SL RNA genes must be expressed, i.e. the SL encoded by the gene must be detected as a read tail and pass length filters. Similarly, the SL RNA gene must satisfy the splice donor, splice acceptor and Sm binding motif filters. This means that SLIDR will report all possible expressed SL RNA genes given the RNA-Seq libraries, but will not report unexpressed genes or genes not satisfying functional motif filters (since these may be pseudogenes). If a comprehensive annotation of putative SL RNA genes including pseudogenes is required, [SLFinder](https://github.com/LBC-Iriarte/SLFinder) is a more appropriate tool.
 
+<a name="slopprguidelines"></a>
 ### SLOPPR
 
 Single SL, spliced only to downstream operonic genes
 Single SL, spliced to upstream and downstream operonic genes
 Single SL, spliced to operonic and monocistronic genes
 
+<a name="citation"></a>
 # Citation
 
 Please cite the bioRxiv preprint:
