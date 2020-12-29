@@ -12,12 +12,12 @@ Full descriptions of the implementation are detailed in the preprint published a
 - [Parameter reference](#reference)
     - [General](#general)
     - [RNA-Seq data input](#input)
-    - [SLIDR](#slidr)
+    - [SLIDR](#slidrparams)
         - [Reference assembly](#refassembly)
         - [Read tail filtering](#tailfilter)
         - [SL RNA filtering](#rnafilter)
         - [Output files](#slidroutput)
-    - [SLOPPR](#sloppr)
+    - [SLOPPR](#slopprparams)
         - [Reference assembly](#refassembly2)
         - [SL screening](#slscreening)
         - [Operon prediction](#operonprediction)
@@ -27,6 +27,7 @@ Full descriptions of the implementation are detailed in the preprint published a
     - [SLOPPR](#slopprguidelines)
 - [Citation](#citation)
 
+<a name="installation"></a>
 ## Installation
 
     # clone repository from GitHub
@@ -39,6 +40,7 @@ Full descriptions of the implementation are detailed in the preprint published a
     # add installation directory to PATH
     export PATH=$PATH:path/to/apps/slidr-sloppr
 
+<a name="dependencies"></a>
 ### Dependencies:
 
 - [CUTADAPT](https://cutadapt.readthedocs.io/en/stable/installation.html) (tested v2.3)
@@ -172,7 +174,7 @@ Leave columns empty if they are not required, for example:
 This configuration file allows great flexibility in mixing single-end and paired-end libraries with different strandedness and existing read alignments.
 Note: Avoid `#` characters in the file contents; they will be stripped! 
 
-<a name="slidr"></a>
+<a name="slidrparams"></a>
 ### SLIDR: Spliced leader identification from RNA-Seq
 
 <a name="refassembly"></a>
@@ -249,7 +251,7 @@ Prefix for predicted SL sequences (default: SL). Output files will use this pref
 - SL sequences in FASTA format
 - SL RNA genes in FASTA and GFF3 format
 
-<a name="sloppr"></a>
+<a name="slopprparams"></a>
 ### SLOPPR: Spliced leader-informed operon prediction from RNA-Seq
 
 <a name="refassembly2"></a>
