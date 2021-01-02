@@ -17,7 +17,7 @@ library("glmpca")
 #				2) SL FASTA file
 #				3) text file with SL2-type SL names
 #				4) SL2:SL1 read-ratio threshold to classify gene as downstream (default: infinity)
-#				5) designate upstream operonic genes (yes/no)
+#				5) SL2-bias at upstream operonic genes (yes/no)
 #				6) intercistronic distance cutoff (default: infinity)
 #				7) Operon prefix (default: OP)
 #				8) aggregation function (sum|median|geo)
@@ -41,7 +41,7 @@ f <- args[1]
 s <- args[2]
 s2 <- gsub("^ ", "", args[3])
 rr.thresh <- as.numeric(args[4])
-upstream <- args[5]
+upstream.bias <- args[5]
 dist.cutoff <- args[6]
 op.prefix <- args[7]
 agg <- args[8]
@@ -55,10 +55,6 @@ colours.cl <- c(`1`="gray30", `2`="#FF9100",
 				Cluster1="gray30", Cluster2="#FFA500", `Cluster1+Cluster2`="red2",
 				SL1="gray30", SL2="#FFA500", `SL1+SL2`="red2", `no SL`="lightgray", `not expressed`="steelblue2",
 				operonic="#FFA500", `not operonic`="gray30")
-
-# working directory
-#wdir <- gsub("counts", paste0("operons_", paste("-z", agg, "-0", zero, "-d", rr.thresh, "-u", upstream, sep=".")), dirname(f))
-#dir.create(wdir)
 
 # outfile prefix
 outpref <- gsub(".clean.txt", "", basename(f))
@@ -503,8 +499,6 @@ invisible(dev.off())
 
 # operons
 inferOperons <- function(cts, cutoff=Inf){
-	#cts <- cts.op[[1]]
-	#cutoff=69; upstream="no"	
 	cts$Status <- rep("not trans-spliced", times=nrow(cts))
 	cts$Operon <- rep(NA, times=nrow(cts))
 	cts <- mclapply(split(cts, interaction(cts$Chr, cts$Strand), drop=T), function(chrs){
@@ -523,61 +517,54 @@ inferOperons <- function(cts, cutoff=Inf){
 		chrs$Status[chrs$Ratio >= rr.thresh] <- "downstream"
 
 		# if intergenic distance constraints have been provided, correct false positive downstream genes
-		# in this case, operons have to have at least two genes (2xdown or 1up + 1 down)
-		# classify downstream genes as monocistronic if distance is > cutoff
-		# AND distance of previous gene is also > cutoff (to avoid last downstream genes in operons being removed)
+		# in this case, operons have to have at least two genes (2xdown or 1up+1down)
+		# classify downstream genes as monocistronic if distance is > cutoff or NA (final gene on contig) ...
 		d <- which(chrs$Status=="downstream" & (chrs$Distance>cutoff | is.na(chrs$Distance)))
+		# ...AND distance of previous gene is also > cutoff (to avoid last downstream genes in operons being removed)
 		m <- d[c(Inf, chrs$Distance)[d]>cutoff]
 		chrs$Status[m] <- "monocistronic"
 
-		# if previous gene is < cutoff AND not another downstream AND we're not assigning upstream genes, also classify as monocistronic
+		# if previous gene is <= cutoff AND not another downstream 
+		# AND upstream genes must have SL2-bias, also classify as monocistronic
 		d <- which(chrs$Status=="downstream" & (chrs$Distance>cutoff | is.na(chrs$Distance)))
-		m <- d[c(Inf, chrs$Distance)[d]<=cutoff & c("dummy", chrs$Status)[d]!="downstream" & upstream=="no"]
+		m <- d[c(Inf, chrs$Distance)[d]<=cutoff & c("dummy", chrs$Status)[d]!="downstream" & upstream.bias=="yes"]
 		chrs$Status[m] <- "monocistronic"
 
 		# need to break apart runs of downstream genes that are multiple operons back to back
 		d <- which(chrs$Status=="downstream" & chrs$Distance>cutoff)
 		b <- d[c(chrs$Status, "dummy")[d+1]=="downstream"]
-
-		#chrs$Status[b] <- paste(chrs$Status[b], "BREAK")
 		b <- sort(c(1:nrow(chrs), b))
 		chrs <- chrs[b,]
 		chrs$Status[duplicated(b)] <- "dummy"
 		
-		# downstream genes < cutoff that are not followed by another downstream gene suggest incomplete operons (SL missing)
-		# if the previous gene is < cutoff AND we are assigning upstream genes, leave the gene as downstream.
+		# downstream genes <= cutoff that are not followed by another downstream gene suggest incomplete operons (SL missing)
+		# if the previous gene is <= cutoff AND upstream genes may be unbiased, leave the gene as downstream.
 		# otherwise, the gene is an orphan, so classify as monocistronic
 		d <- which(chrs$Status=="downstream" & chrs$Distance<=cutoff)
 		m <- d[c("dummy", chrs$Status)[d]!="downstream" & 
-				c(chrs$Status, "dummy")[d+1]!="downstream" & (upstream=="no" | 
-			(upstream=="yes" & c(Inf, chrs$Distance)[d]>cutoff))]
+				c(chrs$Status, "dummy")[d+1]!="downstream" & (upstream.bias=="yes" | 
+			(upstream.bias=="no" & c(Inf, chrs$Distance)[d]>cutoff))]
 		chrs$Status[m] <- "monocistronic"
 
-				
-		#print(cbind(chrs, d=chrs$Distance))
-		#print(m)
-		#stop()
-		
-		#print(cbind(chrs, d=chrs$Distance))
-
 		# define operon annotations from runs of downstream genes
-		# upstream genes can then be added on if requested
+		# upstream genes can then be added on, or be part of the run of SL2-bias required
 		rl <- rle(chrs$Status)
 		for(rn in which(rl$values=="downstream")){
 		  dstr.end <- sum(rl$lengths[0:rn])
 		  dstr.start <- dstr.end-(rl$lengths[rn]-1)
-		  # upstream gene is right before dstr.start (and must conform to distance constraint)
-		  if(upstream=="yes" & dstr.start>1) { 
-			# don't assign a dummy gene as upstream!!!
-			#print(dstr.start-1)
+		  first <- dstr.start
+		  # unbiased upstream gene is right before dstr.start (and must conform to distance constraint)
+		  if(upstream.bias=="no" & dstr.start>1) { 
+			# don't assign a dummy gene (from breaking multiple operons above) as upstream!!!
 			if(chrs$Distance[dstr.start-1]<=cutoff & chrs$Status[dstr.start-1]!="dummy") {
+				# assign previous gene as upstream
 				first <- dstr.start-1
 				chrs$Status[chrs$Geneid==chrs$Geneid[first]] <- "upstream"
-			} else {
-				first <- dstr.start
-			}
-		  } else {
-			first <- dstr.start
+			} 
+		  } else if(upstream.bias=="yes") {
+		    # upstream gene requires SL2 bias
+			# so, designate first downstream gene as upstream
+			chrs$Status[chrs$Geneid==chrs$Geneid[first]] <- "upstream"
 		  }
 		  op.id <- paste0("predicted:Operon_", chrs$Chr[1], "-", chrs$Start[first],
 						"-", chrs$End[dstr.end],

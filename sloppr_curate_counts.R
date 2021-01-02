@@ -39,7 +39,6 @@ loadFC <- function(fc) {
 
 # split genes by exon peaks
 peak_split <- function(dd){
-	
 	dd$Counts <- rowSums(dd[-c(1:6)])
 	dd$Counts[dd$Counts<thresh] <- 0
 	genes <- mclapply(split(dd, dd$Geneid), mc.cores = threads, FUN=function(gene){
@@ -81,7 +80,6 @@ peak_split <- function(dd){
 	return(genes[-ncol(genes)])
 }
 
-
 # background counts and gene-based SL counts need tidying only
 for(fc in c("bg.featureCounts.genes.raw.txt", "un.featureCounts.genes.raw.txt", "SL.featureCounts.genes.raw.txt")){
 	gbc <- loadFC(file.path(wdir, fc))
@@ -93,8 +91,10 @@ for(fc in c("bg.featureCounts.genes.raw.txt", "un.featureCounts.genes.raw.txt", 
 ebc <- loadFC(file.path(wdir, "SL.featureCounts.exons.raw.txt"))
 ng <- length(unique(ebc$Geneid))
 cat(paste("Processed", nrow(ebc), "exon records comprising", ng, "gene IDs ...\n"))
+
 ebc <- peak_split(ebc)
 ngn <- length(unique(ebc$Geneid))
 cat(paste0("Gained ", ngn-ng, " gene IDs (", ngn , " total) by resolving internal exon peaks ...\n"))
+
 write.table(ebc, file.path(wdir, "SL.featureCounts.exons.clean.txt"), row.names=F, col.names=T, quote=F, sep="\t")
 

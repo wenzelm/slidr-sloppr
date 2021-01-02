@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function load_dependencies {
 	# ensure that all dependencies are in PATH
@@ -66,7 +66,7 @@ function printhelp {
 	echo -e "#    -A <chr>\tSplice acceptor site regex (default: AG)"
 	echo -e "#    -R <num>\tMaximum SL RNA length excluding SL (default: 80)"
 	echo -e "#    -O <num>\tMaximum SL overlap with trans-splice acceptor site (default: 10)"
-	echo -e "#    -L <num>\tMaximum base-pair span within stem-loop (default: 25)"
+	echo -e "#    -L <num>\tMaximum base-pair span within stem-loop (default: 35)"
 	echo -e "#"
 }
 
@@ -94,11 +94,11 @@ sm=".{20,60}AT{4,6}G"
 acceptor="AG"
 rlength=80
 overlap=10
-sloop=25
+sloop=35
 slprefix="SL"
 
 # parse command-line options
-cmdline="bash slidr.sh"
+cmdline="slidr.sh"
 while [[ $# -gt 0 ]]
 do
 	key="$1"
@@ -177,38 +177,6 @@ done
 # print input summary on screen and log file
 function print_summary {
 	echo -e "$title"
-	echo -e "------------------- General"
-	printf "%27s %s\n" "Output directory:" $outdir
-	printf "%27s %s\n" "SL name prefix:" $slprefix
-	printf "%27s %s\n" "Threads:" $threads	
-	echo -e "\n----------------- Reference"
-	printf "%27s %s\n" "Genome:" $genome
-	printf "%27s %s\n" "Annotations:" $ann
-	printf "%27s %s\n" "Transcriptome:" $transcriptome
-	echo -e "\n-------- Read tail filtering"
-	printf "%27s %s\n" "Minimum length (bp):" $tlength
-	printf "%27s %s\n" "Maximum length (scale):" $tscale
-	printf "%27s %s\n" "BLASTN E-value:" $evalue
-	echo -e "\n---------- SL RNA filtering"
-	printf "%27s %s\n" "Splice donor site:" $donor
-	printf "%27s %s\n" "Sm binding site:" $sm
-	printf "%27s %s\n" "Splice acceptor site:" $acceptor
-	printf "%27s %s\n" "Maximum SL RNA length:" $rlength
-	printf "%27s %s\n" "Maximum acceptor overlap:" $overlap
-	printf "%27s %s\n" "Maximum stem-loop span:" $sloop
-	echo -e "\n-------------- RNA-Seq data"
-	if [ ! "$design" == "" ] ; then
-		printf "%27s %s\n" "Libraries:" $design
-	else
-		printf "%27s %s\n" "R1 reads:" $R1
-		printf "%27s %s\n" "R2 reads:" $R2
-		printf "%27s %s\n" "Quality trimming:" $clean
-		printf "%27s %s\n" "BAM alignments:" $bam
-		printf "%27s %s\n" "Strandedness:" $stranded
-	fi
-}
-function print_summary2 {
-	echo -e "$title"
 	echo -e "# General:"
 	echo -e "#   > Output directory\t $outdir"
 	echo -e "#   > SL name prefix\t $slprefix"
@@ -239,7 +207,7 @@ function print_summary2 {
 		echo -e  "#   > Strandedness\t $stranded"
 	fi
 }
-print_summary2
+print_summary
 
 # sanity check input
 function sanity_check {
@@ -311,7 +279,7 @@ fi
 if [ ! "$design" == "" ]; then
 	while IFS='#' read lib stranded R1 R2 clean bam
 	do
-		echo "#   * Library $lib (-r $stranded) -1 $R1 -2 $R2 $clean $bam"
+		echo "#   * $lib (-r $stranded) -1 $R1 -2 $R2 $clean $bam"
 		sanity_check
 	done < <(tr -d '#' < $design | tr '\t' '#' )
 fi
@@ -615,7 +583,7 @@ if [ ! "$design" == "" ]; then
 	while IFS='#' read lib stranded R1 R2 clean bam
 	do
 		library_pipeline
-	done < <(tr '\t' '#' < $design)
+	done < <(tr -d '#' < $design | tr '\t' '#' )
 	else
 		# just do it once
 		lib="data"

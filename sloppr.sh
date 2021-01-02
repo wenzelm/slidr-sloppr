@@ -1,14 +1,10 @@
-#!/bin/bash
-
-function timestamp { 
-	date +"[%Y-%m-%d %H:%M:%S]"
-}
+#!/usr/bin/env bash
 
 function load_dependencies {
 	# ensure that all dependencies are in PATH
 	# also add SLOPPR installation directory to PATH
 	# export PATH=$PATH:/path/to/bin
-	echo -e "\n$(timestamp) >>> Loading dependencies"
+	echo -e "#\n$(timestamp) >>> Loading dependencies"
 	module load hisat2-2.1.0
 	module load samtools-1.9
 	module load bedtools-2.28.0
@@ -19,53 +15,61 @@ function load_dependencies {
 	module load subread-1.6.2
 }
 
+
+function timestamp { 
+	date +"[%Y-%m-%d %H:%M:%S]"
+}
+
 title="#\n# SLOPPR - Spliced-Leader-informed Operon Prediction from RNA-Seq data\n# Version 1.1\n#"
 
 function printhelp {
 	echo -e "$title"
-	echo -e "Usage: bash sloppr.sh -g <> -a <> -s <> {-1 <> [-2 <>] | -b <> | -m <>} [-r 0|1|2] [-q]"
-	echo -e "\t\t[-n <>] [-e <>] [-z geo|sum|median] [-0] [-S <>] [-d <>] [-u] [-p <>] [-x <>]"
-	echo -e "\t\t[-o <>] [-c <>]"
-	echo -e "Mandatory input:"
-	echo -e '\t-g\tPath to genome assembly (FASTA)'
-	echo -e '\t-a\tPath to genome annotations (GFF/GTF)'
-	echo -e '\t-s\tPath to SL sequences (FASTA)'
-	echo -e "Single library:"
-	echo -e '\t-1\tPath to R1 reads (FASTQ.GZ)'
-	echo -e '\t-2\tPath to R2 reads (FASTQ.GZ)'
-	echo -e '\t-b\tPath to read alignments (BAM)'
-	echo -e '\t-r\tRead strandedness (0=unstranded; 1=stranded; 2=reverse-stranded; x=infer; default: x)'
-	echo -e "\t-q\tQuality-trim 3' ends of reads and remove adapters"
-	echo -e "Multiple libraries:"
-	echo -e '\t-m\tPath to tab-delimited file describing library configurations:'
-	echo -e '\t\tColumn 1: Library name'
-	echo -e '\t\tColumn 2: Library strandedness (= -r option)'
-	echo -e '\t\tColumn 3: Path to R1 reads (= -1 option)'
-	echo -e '\t\tColumn 4: Path to R2 reads (= -2 option)'
-	echo -e '\t\tColumn 5: "trim" to quality-trim reads (= -q option)'
-	echo -e '\t\tColumn 6: Path to read alignments (= -b option)'
-	echo -e "SL screening:"
-	echo -e "\t-n\tMinimum bp from 3' end of SL required to detect SL (default: 8)"
-	echo -e "\t-e\tMaximum error rate for nucleotide matching (default: 0.09)"
-	echo -e "\t-f\tMeta-feature ID field for read assignment (default: gene_id)"
-	echo -e "Operon prediction:"
-	echo -e "\t-z\t[geo|sum|median] Method for aggregating SL counts across libraries (default: geometric mean [geo])"
-	echo -e "\t-0\tKeep libraries with zero counts when aggregating SL counts (default: remove zeros)"
-	echo -e "\t-S\tPath to list of SL names (FASTA headers from -s) that resolve polycistrons (SL2-type; default: all SLs)"
-	echo -e "\t-d\tMinimum SL2:SL1 read ratio required to classify a gene as downstream (default: infinity, i.e. no SL1 reads)"
-	echo -e "\t-i\tMaximum intercistronic distance (default: infinity; x = infer)"
-	echo -e "\t-u\tDo not predict upstream operonic genes"
-	echo -e "\t-p\tPrefix for operon GFF3 annotations (default: OP)"
-	echo -e "\t-x\tReference operon annotations (GFF/GTF)"
-	echo -e "General:"
-	echo -e '\t-o\tPath to output directory (default: "SLOPPR_[date+time]")'
-	echo -e '\t-c\tThreads (default: all available cores)'
-	echo -e '\t-h\tPrint this help page'
+	echo -e "# Usage: sloppr.sh [-o <>] [-c <>] -g <> -a <>"
+	echo -e "# \t\t   {-1 <> [-2 <>] | -b <> | -m <>} [-r 0|1|2|x] [-q]"
+	echo -e "# \t\t   -s <> [-n <>] [-e <>] [f <>]"
+	echo -e "# \t\t   [-z geo|sum|median] [-0] [-S <>] [-d <>] [-u] [-i <>] [-p <>] [-x <>]"
+	echo -e "#\n# General options:"
+	echo -e '#    -o <dir>\tPath to output directory (default: "SLOPPR_[date+time]")'
+	echo -e "#    -p <chr>\tPrefix for predicted operons (default: OP)"
+	echo -e '#    -c <num>\tThreads (default: all available cores)'
+	echo -e '#    -h\t\tPrint this help page'
+	echo -e "#\n# Reference assembly:"
+	echo -e '#    -g <file>\tPath to genome assembly (FASTA)'
+	echo -e '#    -a <file>\tPath to genome annotations (GFF/GTF)'
+	echo -e "#\n# Single RNA-Seq library:"
+	echo -e '#    -1 <file>\tPath to R1 reads (FASTQ.GZ)'
+	echo -e '#    -2 <file>\tPath to R2 reads (FASTQ.GZ)'
+	echo -e '#    -b <file>\tPath to read alignments (BAM)'
+	echo -e '#    -r <num>\tRead strandedness (0=unstranded; 1=stranded; 2=reverse-stranded; x=infer; default: x)'
+	echo -e "#    -q\t\tQuality-trim 3' ends of reads and remove adapters"
+	echo -e "#\n# Multiple RNA-Seq libraries:"
+	echo -e '#    -m <file>\tPath to tab-delimited file describing library configurations:'
+	echo -e '#    \t\tColumn 1: Library name'
+	echo -e '#    \t\tColumn 2: Library strandedness (= -r option)'
+	echo -e '#    \t\tColumn 3: Path to R1 reads (= -1 option)'
+	echo -e '#    \t\tColumn 4: Path to R2 reads (= -2 option)'
+	echo -e '#    \t\tColumn 5: "trim" to quality-trim reads (= -q option)'
+	echo -e '#    \t\tColumn 6: Path to read alignments (= -b option)'
+	echo -e "#\n# SL quantification:"
+	echo -e '#    -s <file>\tPath to SL sequences (FASTA)'
+	echo -e "#    -n <num>\tMinimum 3' SL overlap with 5' read end (default: 8)"
+	echo -e "#    -e <num>\tMaximum error rate for nucleotide matching (default: 0.09)"
+	echo -e "#    -f <chr>\tMeta-feature ID for read quantification (default: gene_id)"
+	echo -e "#\n# Operon prediction:"
+	echo -e "#    -z <chr>\t[geo|sum|median] Method for aggregating SL counts across libraries (default: geometric mean [geo])"
+	echo -e "#    -0\t\tKeep libraries with zero counts when aggregating SL counts (default: remove zeros)"
+	echo -e "#    -S <file>\tPath to list of SL names (from -s) that resolve polycistrons (SL2-type; default: all SLs)"
+	echo -e "#    -d <num>\tMinimum SL2:SL1 read ratio required for downstream operonic genes (default: infinity, i.e. no SL1 reads)"
+	echo -e "#    -u\t\tEnforce SL2-bias (from -d) at upstream operonic genes"
+	echo -e "#    -i <num>\tMaximum intercistronic distance (default: infinity; x = infer)"
+	echo -e "#    -x <file>\tReference operon annotations (GFF/GTF)"
+	echo -e "#"
 }
 
 #
 # PARSE COMMAND LINE OPTIONS AND SANITY CHECK INPUTS
 #
+
 # fundamental sanity check
 if [[ $# -eq 0 ]] ; then
 	printhelp
@@ -83,12 +87,12 @@ opp="OP"
 agg="geo"
 zero="remove"
 slrr="infinity"
-upstream="yes"
+upstream="no"
 dist="infinity"
 featureid="gene_id"
 
 # parse command-line options
-cmdline="bash sloppr.sh"
+cmdline="sloppr.sh"
 while [[ $# -gt 0 ]]
 do
 	key="$1"
@@ -137,7 +141,7 @@ do
 		-d)		slrr=$2
 				cmdline+=" -d $2"
 		shift; shift;;
-		-u)		upstream="no"
+		-u)		upstream="yes"
 				cmdline+=" -u"
 		shift;;
 		-i)		dist=$2
@@ -169,34 +173,35 @@ done
 # print input summary on screen and log file
 function print_summary {
 	echo -e "$title"
-	echo -e "\n---------------- General"
-	printf "%24s %s\n" "Output directory:" $outdir
-	printf "%24s %s\n" "Threads:" $threads	
-	echo -e "\n----------- SL screening"
-	printf "%24s %s\n" "Genome:" $genome
-	printf "%24s %s\n" "Annotations:" $ann
-	printf "%24s %s\n" "SL sequences:" $sls
-	printf "%24s %s\n" "Minimum SL tail:" $slength
-	printf "%24s %s\n" "Error rate:" $err
-	printf "%24s %s\n" "Meta-feature ID:" $featureid
-	echo -e "\n------ Operon prediction"
-	printf "%24s %s\n" "SL-count aggregation:" "$agg"
-	printf "%24s %s\n" "Zero SL counts:" $zero
-	printf "%24s %s\n" "SL2-type SLs:" $sl2s
-	printf "%24s %s\n" "Minimum SL2:SL1 ratio:" $slrr
-	printf "%24s %s\n" "Maximum distance:" $dist
-	printf "%24s %s\n" "Upstream genes:" $upstream
-	printf "%24s %s\n" "Operon prefix:" $opp
-	printf "%24s %s\n" "Reference operons:" $refops
-	echo -e "\n----------- RNA-Seq data"
+	echo -e "# General:"
+	echo -e "#   > Output directory\t\t $outdir"
+	echo -e "#   > Threads\t\t\t $threads"
+	echo -e "#   > Operon prefix\t\t $opp"
+	echo -e "#   > Reference operons\t\t $refops"
+	echo -e "#\n# Reference:"
+	echo -e "#   > Genome\t\t\t $genome"
+	echo -e "#   > Annotations\t\t $ann"
+	echo -e "#\n# SL quantification:"
+	echo -e "#   > SL sequences\t\t $sls"
+	echo -e "#   > Minimum SL tail\t\t $slength"
+	echo -e "#   > Error rate\t\t $err"
+	echo -e "#   > Meta-feature ID\t\t $featureid"
+	echo -e "#\n# Operon prediction:"
+	echo -e "#   > SL-count aggregation\t $agg"
+	echo -e "#   > Zero SL counts\t\t $zero"
+	echo -e "#   > SL2-type SLs\t\t $sl2s"
+	echo -e "#   > Downstream SL2:SL1 ratio\t >= $slrr"
+	echo -e "#   > Upstream SL2-bias \t $upstream"
+	echo -e "#   > Intercistronic distance\t <= $dist"
+	echo -e "#\n# RNA-Seq data"
 	if [ ! "$design" == "" ] ; then
-		printf "%24s %s\n" "Libraries:" $design
+		echo -e  "#   > Libraries\t\t $design"
 	else
-		printf "%24s %s\n" "R1 reads:" $R1
-		printf "%24s %s\n" "R2 reads:" $R2
-		printf "%24s %s\n" "Quality trimming:" $clean
-		printf "%24s %s\n" "BAM alignments:" $bam
-		printf "%24s %s\n" "Strandedness:" $stranded
+		echo -e  "#   > R1 reads\t\t\t $R1"
+		echo -e  "#   > R2 reads\t\t\t $R2"
+		echo -e  "#   > Quality trimming\t\t $clean"
+		echo -e  "#   > BAM alignments\t\t $bam"
+		echo -e  "#   > Strandedness\t\t $stranded"
 	fi
 }
 print_summary
@@ -271,7 +276,7 @@ fi
 if [ ! "$design" == "" ]; then
 	while IFS='#' read lib stranded R1 R2 clean bam
 	do
-		echo "* Library $lib (-r $stranded) -1 $R1 -2 $R2 $clean $bam"
+		echo "#   * $lib (-r $stranded) -1 $R1 -2 $R2 $clean $bam"
 		sanity_check
 	done < <(tr -d '#' < $design | tr '\t' '#' )
 fi
@@ -287,7 +292,7 @@ print_summary >> "$outdir/0-command_summary.txt"
 #
 # 1) PREPARE GENOME AND GTF
 #
-echo "$(timestamp) >>> STAGE 1: SL screening"
+echo "$(timestamp) >>> STAGE 1: SL read identification"
 
 # convert GFF to GTF if required
 if [ $(echo "$ann" | grep -o "...$") == "gtf" ]; then
@@ -327,8 +332,8 @@ fi
 #
 
 function trim_reads {
-	trR1=$outdir/$lib/${lib/library_/}.R1.trimmed.fq.gz
-	trR2=$outdir/$lib/${lib/library_/}.R2.trimmed.fq.gz
+	trR1=$outdir/$lib/${lib/1-library_/}.R1.trimmed.fq.gz
+	trR2=$outdir/$lib/${lib/1-library_/}.R2.trimmed.fq.gz
 	if [ "$clean" == "trim" ] && [ ! -f $trR1 ]; then
 		echo "$(timestamp) Trimming adapters and poor-quality bases from reads ..."
 		if [ "$R2" == "" ]; then
@@ -511,7 +516,7 @@ function sl_realign {
 # if a library-design file is specified, loop through libraries
 function library_pipeline {
 	echo "$(timestamp) >>> Processing library $lib"
-	lib="library_$lib"
+	lib="1-library_$lib"
 	mkdir -p $outdir/$lib
 	if [ "$bam" == "" ]; then
 		trim_reads
@@ -524,10 +529,10 @@ function library_pipeline {
 	quantify_background
 }
 if [ ! "$design" == "" ]; then
-	while read lib stranded R1 R2 clean bam
+	while IFS='#' read lib stranded R1 R2 clean bam
 	do
 		library_pipeline
-	done < $design
+	done < <(tr -d '#' < $design | tr '\t' '#' )
 	else
 		# just do it once
 		lib="data"
@@ -536,49 +541,51 @@ fi
 
 # generate merged BAM files for convenient viewing in IGV or similar
 echo "$(timestamp) Merging SL BAM files ..."
-mkdir -p $outdir/merged_SL_BAM
+mergedir=$outdir/1-merged_SL_BAM
+mkdir -p $mergedir
 # for each SL
 for SL in $(grep "^>" $sls | tr -d ">")
 do
-	if [ ! -f $outdir/merged_SL_BAM/$SL.all-libraries.bam ]; then
-		samtools merge $outdir/merged_SL_BAM/$SL.all-libraries.bam $outdir/library_*/$SL.fc.bam
-		samtools flagstat $outdir/merged_SL_BAM/$SL.all-libraries.bam > $outdir/merged_SL_BAM/$SL.all-libraries.bam.flagstat
-		samtools index $outdir/merged_SL_BAM/$SL.all-libraries.bam
+	if [ ! -f $mergedir/$SL.all-libraries.bam ]; then
+		samtools merge $mergedir/$SL.all-libraries.bam $outdir/1-library_*/$SL.fc.bam
+		samtools flagstat $mergedir/$SL.all-libraries.bam > $mergedir/$SL.all-libraries.bam.flagstat
+		samtools index $mergedir/$SL.all-libraries.bam
 	fi
 done
 # for each SL type (if known)
-if [ ! "$sl2s" == "" ] && [ ! -f $outdir/merged_SL_BAM/allSL2-type.all-libraries.bam ]; then
-	find $outdir/library_* -name "*.bam" \
+if [ ! "$sl2s" == "" ] && [ ! -f $mergedir/allSL2-type.all-libraries.bam ]; then
+	find $outdir/1-library_* -name "*.bam" \
 		| grep -Fw -f <(grep "^>" $sls | tr -d ">" | grep -Fwv -f <(tr -d ">" < $sl2s)) \
-		| xargs samtools merge $outdir/merged_SL_BAM/allSL1-type.all-libraries.bam
-	samtools flagstat $outdir/merged_SL_BAM/allSL1-type.all-libraries.bam > $outdir/merged_SL_BAM/allSL1-type.all-libraries.bam.flagstat
-	samtools index $outdir/merged_SL_BAM/allSL1-type.all-libraries.bam
+		| xargs samtools merge $mergedir/allSL1-type.all-libraries.bam
+	samtools flagstat $mergedir/allSL1-type.all-libraries.bam > $mergedir/allSL1-type.all-libraries.bam.flagstat
+	samtools index $mergedir/allSL1-type.all-libraries.bam
 	
-	find $outdir/library_* -name "*.bam" \
+	find $outdir/1-library_* -name "*.bam" \
 		| grep -Fw -f <(grep "^>" $sls | tr -d ">" | grep -Fw -f <(tr -d ">" < $sl2s)) \
-		| xargs samtools merge $outdir/merged_SL_BAM/allSL2-type.all-libraries.bam
-	samtools flagstat $outdir/merged_SL_BAM/allSL2-type.all-libraries.bam > $outdir/merged_SL_BAM/allSL2-type.all-libraries.bam.flagstat
-	samtools index $outdir/merged_SL_BAM/allSL2-type.all-libraries.bam
+		| xargs samtools merge $mergedir/allSL2-type.all-libraries.bam
+	samtools flagstat $mergedir/allSL2-type.all-libraries.bam > $mergedir/allSL2-type.all-libraries.bam.flagstat
+	samtools index $mergedir/allSL2-type.all-libraries.bam
 fi
 
 #
 # 3) READ QUANTIFICATION
 #
 echo "$(timestamp) >>> STAGE 2: SL quantification"
+ctdir=$outdir/2-counts
 
 # SL counts
-mkdir -p $outdir/counts
-if [ ! -f $outdir/counts/SL.featureCounts.genes.raw.txt ]; then
+mkdir -p $ctdir
+if [ ! -f $ctdir/SL.featureCounts.genes.raw.txt ]; then
 	echo "$(timestamp) Quantifying SL reads against genes ..."
-	featureCounts -a $gtf -o $outdir/counts/SL.featureCounts.genes.raw.txt \
+	featureCounts -a $gtf -o $ctdir/SL.featureCounts.genes.raw.txt \
 		-t exon -g $featureid -s 1 -O -M -T $threads \
-		$outdir/*/*.fc.bam > $outdir/counts/log_featureCounts.genes.txt 2>&1
+		$outdir/*/*.fc.bam > $ctdir/log_featureCounts.genes.txt 2>&1
 fi
-if [ ! -f $outdir/counts/SL.featureCounts.exons.raw.txt ]; then
+if [ ! -f $ctdir/SL.featureCounts.exons.raw.txt ]; then
 	echo "$(timestamp) Quantifying SL reads against exons ..."	
-	featureCounts -a $outdir/annotations.unique_exons.gtf -o $outdir/counts/SL.featureCounts.exons.raw.txt \
+	featureCounts -a $outdir/annotations.unique_exons.gtf -o $ctdir/SL.featureCounts.exons.raw.txt \
 		-t exon -g $featureid -f -s 1 -O -M -T $threads \
-		$outdir/*/*.fc.bam > $outdir/counts/log_featureCounts.exons.txt 2>&1
+		$outdir/*/*.fc.bam > $ctdir/log_featureCounts.exons.txt 2>&1
 fi
 # non-SL counts (background end-to-end alignments)
 #if [ ! -f $outdir/counts/bg.featureCounts.genes.raw.txt ]; then
@@ -587,37 +594,37 @@ fi
 #		-t exon -g $featureid -s $stranded -p -C -O -M -T $threads \
 #		$outdir/*/end2end_pre-align.bam > $outdir/counts/log_featureCounts.bg.genes.txt 2>&1
 #fi
-if [ ! -f $outdir/counts/bg.featureCounts.genes.raw.txt ]; then
+if [ ! -f $ctdir/bg.featureCounts.genes.raw.txt ]; then
 	# paste 7th column for all background count files
 	fcbg=($outdir/*/end2end_pre-align.bam.fc.txt)
 	x=$(for a in ${fcbg[@]}
 		do
 			echo "<(tail -n +2 $a | cut -f 7)"
 		done | paste -s -d ' ')
-	eval "paste <(tail -n +2 $fcbg | cut -f 1-6) $x" > $outdir/counts/bg.featureCounts.genes.raw.txt
+	eval "paste <(tail -n +2 $fcbg | cut -f 1-6) $x" > $ctdir/bg.featureCounts.genes.raw.txt
 	# also grab all summary files
 	fcbg=($outdir/*/end2end_pre-align.bam.fc.txt.summary)
 	x=$(for a in ${fcbg[@]}
 		do
 			echo "<(cut -f 2 $a)"
 		done | paste -s -d ' ')
-	eval "paste <(cut -f 1 $fcbg) $x" > $outdir/counts/bg.featureCounts.genes.raw.txt.summary
+	eval "paste <(cut -f 1 $fcbg) $x" > $ctdir/bg.featureCounts.genes.raw.txt.summary
 fi
-if [ ! -f $outdir/counts/un.featureCounts.genes.raw.txt ]; then
+if [ ! -f $ctdir/un.featureCounts.genes.raw.txt ]; then
 	# paste 7th column for all background count files
 	fcbg=($outdir/*/untrimmed.bam.txt)
 	x=$(for a in ${fcbg[@]}
 		do
 			echo "<(tail -n +2 $a | cut -f 7)"
 		done | paste -s -d ' ')
-	eval "paste <(tail -n +2 $fcbg | cut -f 1-6) $x" > $outdir/counts/un.featureCounts.genes.raw.txt
+	eval "paste <(tail -n +2 $fcbg | cut -f 1-6) $x" > $ctdir/un.featureCounts.genes.raw.txt
 	# also grab all summary files
 	fcbg=($outdir/*/untrimmed.bam.txt.summary)
 	x=$(for a in ${fcbg[@]}
 		do
 			echo "<(cut -f 2 $a)"
 		done | paste -s -d ' ')
-	eval "paste <(cut -f 1 $fcbg) $x" > $outdir/counts/un.featureCounts.genes.raw.txt.summary
+	eval "paste <(cut -f 1 $fcbg) $x" > $ctdir/un.featureCounts.genes.raw.txt.summary
 fi
 
 #featureCounts -a $outdir/annotations.unique_exons.gtf -o $outdir/counts/bg.featureCounts.exons.raw.txt \
@@ -631,12 +638,12 @@ fi
 # Arguments:	1) directory containing featureCounts output files
 #				2) number of threads
 #				3) minimum number of reads required for a peak
-if [ ! -f $outdir/counts/SL.featureCounts.genes.clean.txt ] || \
-   [ ! -f $outdir/counts/SL.featureCounts.exons.clean.txt ] || \
-   [ ! -f $outdir/counts/bg.featureCounts.genes.clean.txt ] || \
-   [ ! -f $outdir/counts/un.featureCounts.genes.clean.txt ]; then
+if [ ! -f $ctdir/SL.featureCounts.genes.clean.txt ] || \
+   [ ! -f $ctdir/SL.featureCounts.exons.clean.txt ] || \
+   [ ! -f $ctdir/bg.featureCounts.genes.clean.txt ] || \
+   [ ! -f $ctdir/un.featureCounts.genes.clean.txt ]; then
 	echo "$(timestamp) Curating gene annotations ..."	
-	sloppr_curate_counts.R $outdir/counts $threads 4
+	sloppr_curate_counts.R $ctdir $threads 4
 fi
 
 #
@@ -649,13 +656,13 @@ fi
 #				6) number of threads
 echo "$(timestamp) >>> STAGE 3: Operon prediction"
 
-opdir="$outdir/operons-z$agg-0$zero-d$slrr-u$upstream-i$dist"
+opdir="$outdir/3-operons-z$agg-0$zero-d$slrr-u$upstream-i$dist"
 mkdir -p $opdir
 #if [ -f $outdir/operons/operons.gff3 ]; then
 	echo "$(timestamp) Predicting operons ..."	
 
-	sloppr_predict_operons_full.R $outdir/counts/SL.featureCounts.genes.clean.txt $sls " $sl2s" $slrr $upstream $dist $opp "$agg" $zero $threads $opdir
-	sloppr_predict_operons_full.R $outdir/counts/SL.featureCounts.exons.clean.txt $sls " $sl2s" $slrr $upstream $dist $opp "$agg" $zero $threads $opdir
+	sloppr_predict_operons.R $ctdir/SL.featureCounts.genes.clean.txt $sls " $sl2s" $slrr $upstream $dist $opp "$agg" $zero $threads $opdir
+	sloppr_predict_operons.R $ctdir/SL.featureCounts.exons.clean.txt $sls " $sl2s" $slrr $upstream $dist $opp "$agg" $zero $threads $opdir
 #fi
 
 #
@@ -680,7 +687,4 @@ if [ ! "$refops" == "" ]; then
 fi
 
 echo "$(timestamp) Finished!"
-
-
-
-
+exit 0
