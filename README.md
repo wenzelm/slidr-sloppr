@@ -1,6 +1,6 @@
 # SLIDR and SLOPPR: A suite of two pipelines for flexible identification of spliced leader *trans*-splicing and prediction of eukaryotic operons from RNA-Seq data
 
-SLIDR and SLOPPR identify spliced leaders (SLs) from 5'-tails of RNA-Seq reads that are soft-clipped after read alignment to a reference genome or transcriptome. SLIDR (Spliced leader identification from RNA-Seq data) assembles these read tails into full-length SLs and functional SL RNA genes. SLOPPR (Spliced leader-informed operon prediction from RNA-Seq data) searches read tails for a set of known SLs, quantifies SL-containing reads against all genes in the genome and uses SL usage patterns across genes to predict operons. SLOPPR can incorporate known SL specialisation for resolving downstream operonic genes (e.g., SL1/SL2-type SLs in nematodes), or infer such specialisation *de novo*.
+SLIDR and SLOPPR identify spliced leaders (SLs) from 5'-tails of RNA-Seq reads that are soft-clipped after read alignment to a reference genome or transcriptome. SLIDR (Spliced leader identification from RNA-Seq data) assembles these read tails into full-length SLs and functional SL RNA genes. SLOPPR (Spliced leader-informed operon prediction from RNA-Seq data) searches read tails for a set of known SLs, quantifies SL-containing reads against all genes in the genome and uses SL usage patterns across genes to predict operons. SLOPPR can incorporate known SL specialisation for resolving downstream operonic genes (e.g., SL1/SL2-type SLs in nematodes), infer such specialisation *de novo*, or handle scenarios without SL specialisation.
 
 Full descriptions of the implementation are detailed in the preprint published at bioRxiv: [https://doi.org/10.1101/2020.12.23.423594](https://doi.org/10.1101/2020.12.23.423594)
 
@@ -10,14 +10,14 @@ Full descriptions of the implementation are detailed in the preprint published a
     - [Dependencies](#dependencies)
     - [Quick start with example data](#quickstart)
 - [Reference manual](#reference)
-    - [General](#general)
+    - [General options for both pipelines](#general)
     - [RNA-Seq data input](#input)
-    - [SLIDR](#slidrparams)
+    - [SLIDR (Spliced leader identification from RNA-Seq data)](#slidrparams)
         - [Reference assembly](#refassembly)
         - [Read tail filtering](#tailfilter)
         - [SL RNA filtering](#rnafilter)
         - [Output files](#slidroutput)
-    - [SLOPPR](#slopprparams)
+    - [SLOPPR (Spliced leader-informed operon prediction from RNA-Seq data)](#slopprparams)
         - [Reference assembly](#refassembly2)
         - [SL quantification](#slquantification)
         - [Operon prediction](#operonprediction)
