@@ -377,7 +377,7 @@ Use this initial SLIDR output to build a more stringent set of filters for a sec
 
 In our experience, SLIDR often detects novel SL variants and in some cases perhaps even novel SL classes. SLIDR is also useful for telling apart functional SL RNA genes from pseudogenes. We recommend SLIDR as a tool for initial data exploration to uncover untapped SL diversity even if the canonical SL sequences are already known.
 
-#### My organism has very diverse SL with vastly different SL RNA characteristics - how to run SLIDR?
+#### My organism has very diverse SLs with vastly different SL RNA characteristics - how to run SLIDR?
 
 The safest way is to run SLIDR multiple times, each time optimising parameters for each SL type. Alternatively, try and define parameters such that they capture all SL types at once. For example, in *Hydra vulgaris* where two major SL classes exist with different SL lengths and Sm binding motifs, the following parameters capture both SL types:
 

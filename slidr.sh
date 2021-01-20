@@ -298,14 +298,16 @@ print_summary >> "$outdir/0-command_summary.txt"
 echo "$(timestamp) >>> STAGE 1: Read tail extraction"
 
 # convert GFF to GTF if required
-if [ $(echo "$ann" | grep -o "...$") == "gtf" ]; then
-	gtf=$ann
-else
-	if [ ! -f $outdir/annotations.gtf ]; then
-		echo "$(timestamp) Converting GFF to GTF ..."
-		gffread $ann -M -K -Q -C -T -o "$outdir/annotations.gtf"
+if [ ! "$ann" == "" ]; then
+	if [ $(echo "$ann" | grep -o "...$") == "gtf" ]; then
+		gtf=$ann
+	else
+		if [ ! -f $outdir/annotations.gtf ]; then
+			echo "$(timestamp) Converting GFF to GTF ..."
+			gffread $ann -M -K -Q -C -T -o "$outdir/annotations.gtf"
+		fi
+		gtf="$outdir/annotations.gtf"	
 	fi
-	gtf="$outdir/annotations.gtf"	
 fi
 
 # make hisat2 index for genome

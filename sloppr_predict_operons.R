@@ -203,11 +203,13 @@ sl_clusters <- function(dd){
   #hc <- hclust(di, method="ward.D2")
   
   hc <- dendro_data(hc, type="rectangle")
-  km <- kmeans(gpca$factors, centers=2-(nrow(gpca$factors)<2), nstart=25, iter.max=25)
-  
-  if(nrow(gpca$factors)>=2) {
+  km <- kmeans(gpca$factors, centers=2-(nrow(gpca$factors)<=2), nstart=25, iter.max=25)
+
+  if(nrow(km$centers)==2) {
+	cat("successful!\n")
 	ld <- predict(lda(gpca$factors, km$cluster, tol=1e-25))$x[,1]
   } else {
+	cat("too few samples to define clusters!\n")
 	ld <- 0
   }
   
@@ -279,7 +281,7 @@ sl_clusters <- function(dd){
   dd <- c(dd, MDSplots=list(sl.gg))
   return(dd)
 }
-cat("Identifying SL clusters ...\n")
+cat("Identifying SL clusters ... ")
 fc <- sl_clusters(fc)
 pdf(file.path(wdir, paste0(outpref, ".SL_clusters.pdf")), width=12, height=12)
 	grid.draw(fc$MDSplots)
@@ -594,13 +596,14 @@ if(dist.cutoff=="x") { #infer
 		x <- na.exclude(log10(x+1))
 		if(length(x)>=3 & length(unique(x))>=2) {
 			km <- kmeans(x, 2)
-			cu <- 10^min(tapply(x, km$cluster, max))
+			cu <- round(10^min(tapply(x, km$cluster, max)), digits=0)-1
 		} else {
 			cu = Inf
 		}
 		cu
 	})
-	cat(paste("\nInferred intercistronic distance cutoffs:", paste(cutoffs, collapse="; "), "\n"))
+	cat("\nInferred intercistronic distance cutoffs:")
+	print(unname(data.frame(c("SL2", "Cluster1", "Cluster2"), cutoffs)), row.names = FALSE)
 } else { # supplied
 	cutoffs <- rep(as.numeric(dist.cutoff), 3)
 }
