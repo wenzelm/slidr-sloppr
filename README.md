@@ -85,11 +85,11 @@ The script generates all input files and runs basic analyses, supplying the geno
 
     >Cel-SL2
 
-The on-screen SLIDR results consist of the expected SL1 and SL2 sequences, assembled from 22-19 reads, encoded by 1-10 SL RNA genes and *trans*-spliced to 12-14 genes:
+The on-screen SLIDR results consist of the expected SL1 and SL2 sequences, assembled from 159-3288 reads, encoded by 1-10 SL RNA genes and *trans*-spliced to 67-764 genes:
 
                     Sequence Reads SL_RNA_Genes SLTS_Genes
-      ggttTAATTACCCAAGTTTGAG    29       10            14
-     GGTTTTAACCCAGTTTAACCAAG    22        1            12
+      GGTTTAATTACCCAAGTTTGAG  3288       10           764
+     GGTTTTAACCCAGTTTAACCAAG   159        1            67
 
 The on-screen SLOPPR results detail expectedly low SL-trans-splicing rates (5.14 %) and 84 predicted operons using SL2 as a polycistron resolver:
 

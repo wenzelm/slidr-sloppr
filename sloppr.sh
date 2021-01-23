@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 function load_dependencies {
 	# ensure that all dependencies are in PATH
@@ -14,7 +15,6 @@ function load_dependencies {
 	module load cutadapt-2.3
 	module load subread-1.6.2
 }
-
 
 function timestamp { 
 	date +"[%Y-%m-%d %H:%M:%S]"

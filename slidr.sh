@@ -814,8 +814,7 @@ cand="$outdir/2-RNA_filters/SL.filters-x$tscale-l$tlength-e$evalue-R$rlength-D$d
 if [ ! -f $cand ]; then
 	echo "$(timestamp) Collecting SL RNA filter results ..."
 	# merge all filter results into a single table
-	LC_ALL=C
-	export LC_ALL
+	export LC_ALL=C
 	#echo -e "Donor_Region\tRead\tCentroid\tRepresentative\tChrom_Tail\tPos_Tail\tBLASTN_Match\tOutron_Overlap\tChrom_Gene\tPos_Gene\tAcceptor_Region\tLoops\tMFE_Frequency\tEnsemble_Diversity" \
 	#	> $outdir/2-RNA_filters/SL_merged_filters.txt
 	join -e '-' -t "$(printf '\t')" -1 1 -2 2 \

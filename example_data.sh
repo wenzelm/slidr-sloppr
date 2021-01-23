@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 mkdir -p toy_data
 
