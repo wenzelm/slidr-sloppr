@@ -365,7 +365,7 @@ Note that SL RNA filters (`-D` and `-S`) will only work if your assembly contain
 
 #### SLs and SL RNAs are entirely uncharacterised in my organism - how do I get started with SLIDR?
 
-If your organism is a nematode, run SLIDR with default parameters, which are optimised for nematode SLs. If your organism is a different eukaryote, modify or switch off the Sm binding motif filter (`-S ''`) and allow longer read tails (`-x 1.5`) to capture a broad range of tail lengths:
+If your organism is a nematode, run SLIDR with default parameters, which are optimised for nematode SLs. If your organism is a different eukaryote, modify or switch off the *Sm* binding motif filter (`-S ''`) and allow longer read tails (`-x 1.5`) to capture a broad range of tail lengths:
 
     slidr.sh -S '' -x 1.5
 
@@ -379,7 +379,7 @@ In our experience, SLIDR often detects novel SL variants and in some cases perha
 
 #### My organism has very diverse SLs with vastly different SL RNA characteristics - how to run SLIDR?
 
-The safest way is to run SLIDR multiple times, each time optimising parameters for each SL type. Alternatively, try and define parameters such that they capture all SL types at once. For example, in *Hydra vulgaris* where two major SL classes exist with different SL lengths and Sm binding motifs, the following parameters capture both SL types:
+The safest way is to run SLIDR multiple times, each time optimising parameters for each SL type. Alternatively, try and define parameters such that they capture all SL types at once. For example, in *Hydra vulgaris* where two major SL classes exist with different SL lengths and *Sm* binding motifs, the following parameters capture both SL types:
 
     slidr.sh -S '.{10,35}[AG]ATTTT[CG][AG]' -x 1.4 -R 60
 

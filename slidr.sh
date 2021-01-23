@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 function load_dependencies {
 	# ensure that all dependencies are in PATH
@@ -626,11 +627,16 @@ fi
 clusterprefix=$tailprefix.cluster 
 if [ ! -f $clusterprefix.centroids.fa.gz ]; then
 	echo "$(timestamp) Clustering tails ..."
-	vsearch --cluster_fast $tailprefix.derep.fa.gz --id 1.0 --rightjust --minwordmatches 100 \
+	# --wordsize 8 --minwordmatches 1000 ensures high match sensitivity
+	# --sizeorder --maxaccepts 1000 --maxrejects 1000 ensures that short tails are given to the most abundant sequences
+	vsearch --cluster_fast $tailprefix.derep.fa.gz --qmask none \
 		--uc $clusterprefix.out --centroids $clusterprefix.centroids.fa \
 		--consout $clusterprefix.consensus.fa \
 		--sizein --clusterout_sort -xsize \
-		--minseqlength $tlength --threads $threads --iddef 0 --qmask none \
+		--minseqlength $tlength --threads $threads \
+		--id 1.0 --iddef 0 --rightjust \
+		--wordlength 8 --minwordmatches 1000 \
+		--sizeorder --maxaccepts 1000 --maxrejects 1000 \
 		> $clusterprefix.log-vsearch.txt 2>&1
 	awk '$1=="H"{print $10, $9}$1=="S"{print $9, $9}' OFS="\t" $clusterprefix.out \
 		| sed 's/;size=[0-9]\+;//g' | gzip > $clusterprefix.clusterinfo.txt.gz
@@ -831,12 +837,14 @@ if [ ! -f $cand.centroids.fa.gz ]; then
 	#zcat $outdir/2-RNA_filters/splice_donor_sites.txt | awk -F'\t' '{print ">"$1"::"$4"::"$5"\n"$4$5}' \
 	#	| gzip > $outdir/2-RNA_filters/SL_tails.fa.gz
 	
-	vsearch --cluster_fast $cand.SLtails.fa.gz \
-		--uc $cand.clusters.out \
-		--centroids $cand.centroids.fa \
-		--id 1.0 --iddef 0 --minseqlength $tlength --qmask none \
-		--sizeorder --maxaccepts 100 --wordlength 15 \
-		--threads $threads --rightjust --minwordmatches 1000 \
+	# --wordsize 8 --minwordmatches 1000 ensures high match sensitivity
+	# --sizeorder --maxaccepts 1000 --maxrejects 1000 ensures that short tails are given to the most abundant sequences
+	vsearch --cluster_fast $cand.SLtails.fa.gz --qmask none \
+		--uc $cand.clusters.out --centroids $cand.centroids.fa \
+		--id 1.0 --iddef 0 --rightjust \
+		--minseqlength $tlength --threads $threads \
+		--wordlength 8 --minwordmatches 1000 \
+		--sizeorder --maxaccepts 1000 --maxrejects 1000 \
 		> "$cand.log_vsearch-cluster.txt" 2>&1
 		
 	awk -F'::|\t' '$1~"S|H"{print $2, $9, $10, $11}' OFS="\t" $cand.clusters.out \
