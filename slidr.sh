@@ -1,30 +1,25 @@
 #!/usr/bin/env bash
 set -e
 
+function timestamp { 
+	date +"[%Y-%m-%d %H:%M:%S]"
+}
+
 function load_dependencies {
 	# ensure that all dependencies are in PATH
-	# also add SLIDR installation directory to PATH
-	# export PATH=$PATH:/path/to/slidr-sloppr
 	echo -e "#\n$(timestamp) >>> Loading dependencies"
 	module load hisat2-2.1.0
 	module load samtools-1.9
 	module load bedtools-2.28.0
 	module load seqtk-1.3
-	#module load cdhit-4.8.1
-	module load vsearch-2.4.3
+	module load vsearch-2.4.3	
 	module load blast-2.9.0
 	module load r-data.table
 	module load r-3.6.1
-	#module load star-2.7.1a
 	module load gffread-0.11.4
 	module load cutadapt-2.3
 	module load bowtie2-2.3.5
 	export PATH="$PATH:/uoa/home/s02mw5/sharedscratch/apps/ViennaRNA-2.4.14/bin"
-	#export PATH="$PATH:/uoa/home/s02mw5/slidr-sloppr"
-}
-
-function timestamp { 
-	date +"[%Y-%m-%d %H:%M:%S]"
 }
 
 title="#\n# SLIDR - Spliced Leader IDentification from RNA-Seq data\n# Version 1.1\n#"
@@ -371,44 +366,6 @@ function trim_reads {
 	fi
 }
 
-function star_align { #DEPRECATED
-	# make STAR index
-	if [ ! -d $outdir/STAR_index ]; then
-		echo "$(timestamp) Generating STAR index ..."
-		mkdir -p $outdir/STAR_index
-		NB=12 #$(echo "l($(grep -v ">" $genome | wc -c))/l(2)/2-1" | bc -l | sed 's/\..*//g')
-		if [ ! "$ann" == "" ]; then
-			rlength=$(seqtk seq -l 0 $R1 | head -n 4000 | wc -L)
-			stargtf="--sjdbGTFfile $ann --sjdbOverhang $(($rlength-1))" 
-		fi
-		STAR --runMode genomeGenerate \
-			--genomeDir $outdir/STAR_index \
-			--genomeFastaFiles $genome \
-			--runThreadN $threads \
-			--genomeSAindexNbases $([ $NB -gt 14 ] && echo "14" || echo "$NB") \
-			$stargtf \
-			> $outdir/log_star-genomeGenerate.txt 2>&1
-	fi
-
-	echo "$(timestamp) Aligning reads to genome ..."
-	STAR --genomeDir $outdir/STAR_index \
-		--readFilesIn $R1 $R2 \
-		--readFilesCommand zless \
-		--outSAMtype BAM Unsorted \
-		--outFileNamePrefix $outdir/STAR \
-		--runThreadN $threads \
-		--outFilterMultimapNmax 20 \
-		--alignSJoverhangMin 8 \
-		--alignSJDBoverhangMin 1 \
-		--outFilterMismatchNmax 999 \
-		--outFilterMismatchNoverReadLmax 0.04 \
-		--alignIntronMin 10 \
-		--alignIntronMax 1000000 \
-		--alignMatesGapMax 1000000 \
-		--alignEndsType Local \
-		> $outdir/log_star_align.txt
-}
-
 function genome_align {
 	bam="$outdir/$lib/alignments-x$tscale.bam"
 	if [ ! -f $bam ]; then
@@ -514,6 +471,10 @@ function tail_extract {
 	# mapped to + strand: -F 20			take 3' tail from read (rev compl) (90MS10)
 	# mapped to - strand: -F 4 -f 16	take 3' tail from read (10S90M)
 	
+	# exclude secondary alignments? no
+	# -F 276 instead of -F 20
+	# -F 260 instead of -F 4
+	
 	# check if we have single-end reads:
 	# if so, treat like unstranded data
 	npe=$({ samtools view -H $bam ; samtools view $bam | head -n 10000; } | samtools view -c -f 1 -)
@@ -526,7 +487,7 @@ function tail_extract {
 	if [ ! -f "$bam.tails+5p.fa.gz" ]; then
 		samtools view -H $bam > "$bam.tails+5p.sam"
 		samtools view -F 20 -f $((0+ (64*$stranded))) $bam \
-			| awk '$6 ~ "^[0-9]*S"' | tee -a $bam.tails+5p.sam \
+			| awk '$6 ~ "^[0-9]*S"{$1="aln+5p"NR"_"$1; print}' OFS="\t" | tee -a $bam.tails+5p.sam \
 			| awk '{gsub("S.*", "", $6); t=substr($10,1,$6); print ">"$1"\n"t}' \
 			| seqtk seq -U > "$bam.tails+5p.fa"
 		gzip $bam.tails+5p.sam
@@ -535,7 +496,7 @@ function tail_extract {
 	if [ ! -f "$bam.tails-5p.fa.gz" ]; then
 		samtools view -H $bam > "$bam.tails-5p.sam"	
 		samtools view -F 4 -f $((16+ (64*$stranded))) $bam \
-			| awk '$6 ~ "[0-9]*S$"' | tee -a $bam.tails-5p.sam \
+			| awk '$6 ~ "[0-9]*S$"{$1="aln-5p"NR"_"$1; print}' OFS="\t" | tee -a $bam.tails-5p.sam \
 			| awk '{gsub("S", "", $6); gsub(".*[A-Z]", "", $6); 
 				t=substr($10,length($10)+1-$6,$6); print ">"$1"\n"t}' \
 			| seqtk seq -Ur > "$bam.tails-5p.fa"
@@ -545,7 +506,7 @@ function tail_extract {
 	if [ ! -f "$bam.tails+3p.fa.gz" ]; then	
 		samtools view -H $bam > "$bam.tails+3p.sam"
 		samtools view -F 20 -f $((0+ (192-64*$stranded)*($stranded>0))) $bam \
-			| awk '$6 ~ "[0-9]*S$"' | tee -a $bam.tails+3p.sam \
+			| awk '$6 ~ "[0-9]*S$"{$1="aln+3p"NR"_"$1; print}' OFS="\t" | tee -a $bam.tails+3p.sam \
 			| awk '{gsub("S", "", $6); gsub(".*[A-Z]", "", $6); 
 				t=substr($10,length($10)+1-$6,$6); print ">"$1"\n"t}' \
 			| seqtk seq -Ur > "$bam.tails+3p.fa"
@@ -555,7 +516,7 @@ function tail_extract {
 	if [ ! -f "$bam.tails-3p.fa.gz" ]; then
 		samtools view -H $bam > "$bam.tails-3p.sam"
 		samtools view -F 4 -f $((16+ (192-64*$stranded)*($stranded>0))) $bam \
-			| awk '$6 ~ "^[0-9]*S"' | tee -a $bam.tails-3p.sam \
+			| awk '$6 ~ "^[0-9]*S"{$1="aln-3p"NR"_"$1; print}' OFS="\t" | tee -a $bam.tails-3p.sam \
 			| awk '{gsub("S.*", "", $6); t=substr($10,1,$6); print ">"$1"\n"t}' \
 			| seqtk seq -U > "$bam.tails-3p.fa"
 		gzip $bam.tails-3p.sam
@@ -606,13 +567,16 @@ fi
 tailprefix=$outdir/1-tails/tails-x$tscale-l$tlength
 if [ ! -f $tailprefix.derep.fa.gz ]; then
 	echo "$(timestamp) Dereplicating tails ..."
-	vsearch --derep_fulllength $outdir/1-tails/tails-x$tscale.fa.gz \
+	zcat $outdir/1-tails/tails-x$tscale.fa.gz \
+	| vsearch --derep_fulllength - \
 		--output $tailprefix.derep.fa \
 		--uc $tailprefix.derep.out.txt \
-		--minseqlength $tlength --sizeout --threads $threads \
+		--minseqlength $tlength \
+		--threads $threads \
 		> $tailprefix.derep.log-vsearch.txt 2>&1
 	#awk '$1=="C"{print $9, $3}' OFS="\t" $outdir/tails/tails.derep.out.txt \
 	#	> $outdir/tails/tails.derep.clusterinfo.txt
+	# two columns: centroid, read
 	awk '$1=="H"{print $10, $9}$1=="S"{print $9, $9}' OFS="\t" $tailprefix.derep.out.txt \
 		| gzip > $tailprefix.derep.clusterinfo.txt.gz
 	gzip $tailprefix.derep.fa
@@ -629,17 +593,18 @@ if [ ! -f $clusterprefix.centroids.fa.gz ]; then
 	echo "$(timestamp) Clustering tails ..."
 	# --wordsize 8 --minwordmatches 1000 ensures high match sensitivity
 	# --sizeorder --maxaccepts 1000 --maxrejects 1000 ensures that short tails are given to the most abundant sequences
-	vsearch --cluster_fast $tailprefix.derep.fa.gz --qmask none \
+	zcat $tailprefix.derep.fa.gz \
+	| vsearch --cluster_fast - --qmask none \
 		--uc $clusterprefix.out --centroids $clusterprefix.centroids.fa \
 		--consout $clusterprefix.consensus.fa \
-		--sizein --clusterout_sort -xsize \
+		--clusterout_sort \
 		--minseqlength $tlength --threads $threads \
 		--id 1.0 --iddef 0 --rightjust \
 		--wordlength 8 --minwordmatches 1000 \
-		--sizeorder --maxaccepts 1000 --maxrejects 1000 \
+		--sizeorder --maxaccepts 0 --maxrejects 0 \
 		> $clusterprefix.log-vsearch.txt 2>&1
 	awk '$1=="H"{print $10, $9}$1=="S"{print $9, $9}' OFS="\t" $clusterprefix.out \
-		| sed 's/;size=[0-9]\+;//g' | gzip > $clusterprefix.clusterinfo.txt.gz
+		| gzip > $clusterprefix.clusterinfo.txt.gz
 	gzip $clusterprefix.out
 	gzip $clusterprefix.centroids.fa
 	gzip $clusterprefix.consensus.fa
@@ -660,7 +625,9 @@ fi
 mkdir -p $outdir/2-RNA_filters
 echo "$(timestamp) >>> STAGE 2: SL RNA identification"
 # map to the genome or transcriptome
-# ensure that the 3' end of the tail is aligned (5' end can contain noise, so not important)
+# ensure that the 3' end of the tail is aligned (5' end can contain noise, so not important) $8==$14
+# keep the longest match(es) for each tail:
+# awk '$8==$14{ if($1==q){if($4==l)print} else {q=$1;l=$4; print} }'
 
 if [ ! "$genome" == "" ]; then
 	ref=$genome
@@ -675,7 +642,7 @@ fi
 
 blastprefix=$outdir/2-RNA_filters/centroids-x$tscale-l$tlength.blastn-e$evalue
 if [ ! -f $blastprefix.out.gz ]; then
-	zless $clusterprefix.centroids.fa.gz \
+	zcat $clusterprefix.centroids.fa.gz \
 		| blastn -db $outdir/blast_db/reference -dust yes \
 			-query - -word_size 8 -num_threads $threads -perc_identity 100 -evalue $evalue \
 			-outfmt '6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore qseq qlen' \
@@ -750,16 +717,16 @@ if [ ! -f "$spliceout" ]; then
 	clinfo=$tailprefix.derep.clusterinfo.txt.gz
 
 	{ bedtools bamtobed -i $tailbams.tails+5p.bam \
-		| grep -Fw -f <(zless $clinfo | cut -f 2) - \
+		| grep -Fw -f <(zcat $clinfo | cut -f 2) - \
 		| awk '{$3=$2+1; print}' OFS="\t";
 	  bedtools bamtobed -i $tailbams.tails-3p.bam \
-		| grep -Fw -f <(zless $clinfo | cut -f 2) - \
+		| grep -Fw -f <(zcat $clinfo | cut -f 2) - \
 		| awk '{$3=$2+1; $6="+"; print}' OFS="\t";
 	  bedtools bamtobed -i $tailbams.tails-5p.bam \
-		| grep -Fw -f <(zless $clinfo | cut -f 2) - \
+		| grep -Fw -f <(zcat $clinfo | cut -f 2) - \
 		| awk '{$2=$3-1; print}' OFS="\t";
 	  bedtools bamtobed -i $tailbams.tails+3p.bam \
-		| grep -Fw -f <(zless $clinfo | cut -f 2) - \
+		| grep -Fw -f <(zcat $clinfo | cut -f 2) - \
 		| awk '{$2=$3-1; $6="-"; print}' OFS="\t"; } \
 	| bedtools slop -g $outdir/reference.fa.fai -i - -s -l $acclen -r $overlap \
 	| bedtools getfasta -fi $outdir/reference.fa -bed - -s -tab -name+ \
@@ -818,8 +785,8 @@ if [ ! -f $cand ]; then
 	#echo -e "Donor_Region\tRead\tCentroid\tRepresentative\tChrom_Tail\tPos_Tail\tBLASTN_Match\tOutron_Overlap\tChrom_Gene\tPos_Gene\tAcceptor_Region\tLoops\tMFE_Frequency\tEnsemble_Diversity" \
 	#	> $outdir/2-RNA_filters/SL_merged_filters.txt
 	join -e '-' -t "$(printf '\t')" -1 1 -2 2 \
-		<(zless $tailprefix.derep.clusterinfo.txt.gz | sort -S50% -k1,1 | uniq) \
-		<(zless $clusterprefix.clusterinfo.txt.gz | sort -S50% -k 2,2 | uniq) \
+		<(zcat $tailprefix.derep.clusterinfo.txt.gz | sort -S50% -k1,1 | uniq) \
+		<(zcat $clusterprefix.clusterinfo.txt.gz | sort -S50% -k 2,2 | uniq) \
 		| sort -S50% -k3,3 | uniq \
 	| join -e '-' -t "$(printf '\t')" -1 3 -2 1 - <(zcat "$smout" | sort -S50% -k1,1 | uniq) \
 		| sort -S50% -k3,3 | uniq \
@@ -831,19 +798,20 @@ fi
 # construct SL tails and cluster them
 if [ ! -f $cand.centroids.fa.gz ]; then
 	echo "$(timestamp) Re-clustering SL candidates ..."
-	zcat $cand | awk -F'\t' '{gsub("-", "", $8); print ">"$2"::"$7"::"$8"\n"$7$8}' \
-		| gzip > $cand.SLtails.fa.gz
+	zcat $cand | awk -F'\t' '{gsub("-", "", $8); print ">"$2"::"$7"::"$8"::nl::"$7$8}' \
+		| sort | uniq | sed 's/::nl::/\n/g' | gzip > $cand.SLtails.fa.gz
 	#zcat $outdir/2-RNA_filters/splice_donor_sites.txt | awk -F'\t' '{print ">"$1"::"$4"::"$5"\n"$4$5}' \
 	#	| gzip > $outdir/2-RNA_filters/SL_tails.fa.gz
 	
 	# --wordsize 8 --minwordmatches 1000 ensures high match sensitivity
-	# --sizeorder --maxaccepts 1000 --maxrejects 1000 ensures that short tails are given to the most abundant sequences
-	vsearch --cluster_fast $cand.SLtails.fa.gz --qmask none \
+	# --sizeorder --maxaccepts 0 --maxrejects 0 ensures that short tails are given to the most abundant sequences
+	zcat $cand.SLtails.fa.gz \
+	| vsearch --cluster_fast - --qmask none \
 		--uc $cand.clusters.out --centroids $cand.centroids.fa \
 		--id 1.0 --iddef 0 --rightjust \
 		--minseqlength $tlength --threads $threads \
 		--wordlength 8 --minwordmatches 1000 \
-		--sizeorder --maxaccepts 1000 --maxrejects 1000 \
+		--sizeorder --maxaccepts 0 --maxrejects 0 \
 		> "$cand.log_vsearch-cluster.txt" 2>&1
 		
 	awk -F'::|\t' '$1~"S|H"{print $2, $9, $10, $11}' OFS="\t" $cand.clusters.out \

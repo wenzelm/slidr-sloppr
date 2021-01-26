@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 set -e
 
+function timestamp { 
+	date +"[%Y-%m-%d %H:%M:%S]"
+}
+
 function load_dependencies {
 	# ensure that all dependencies are in PATH
-	# also add SLOPPR installation directory to PATH
-	# export PATH=$PATH:/path/to/bin
 	echo -e "#\n$(timestamp) >>> Loading dependencies"
 	module load hisat2-2.1.0
 	module load samtools-1.9
@@ -14,10 +16,6 @@ function load_dependencies {
 	module load gffread-0.11.4
 	module load cutadapt-2.3
 	module load subread-1.6.2
-}
-
-function timestamp { 
-	date +"[%Y-%m-%d %H:%M:%S]"
 }
 
 title="#\n# SLOPPR - Spliced-Leader-informed Operon Prediction from RNA-Seq data\n# Version 1.1\n#"

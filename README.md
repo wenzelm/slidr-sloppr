@@ -43,14 +43,14 @@ Full descriptions of the implementation are detailed in the preprint published a
 <a name="dependencies"></a>
 ### Dependencies:
 
-- [CUTADAPT](https://cutadapt.readthedocs.io/en/stable/installation.html) (tested v2.3)
+- [CUTADAPT](https://cutadapt.readthedocs.io/en/stable/installation.html) (tested v2.3; requires Python3 for multithreading)
 - [GFFREAD](https://github.com/gpertea/gffread) (tested v0.11.4)
 - [HISAT2](http://daehwankimlab.github.io/hisat2/download/) (tested v2.1.0)
 - [BOWTIE2](https://sourceforge.net/projects/bowtie-bio/files/bowtie2/) (tested v2.3.5; only required for transcriptome references)
 - [SAMTOOLS](http://www.htslib.org/download/) (tested v1.9)
 - [BEDTOOLS](https://github.com/arq5x/bedtools2) (tested v2.28.0)
 - [SEQTK](https://github.com/lh3/seqtk) (tested v1.3)
-- [VSEARCH](https://github.com/torognes/vsearch) (tested v2.4.3)
+- [VSEARCH](https://github.com/torognes/vsearch) (tested v2.15.1)
 - [BLASTN](https://www.ncbi.nlm.nih.gov/books/NBK279671/) (tested v2.9.0)
 - [FEATURECOUNTS](http://bioinf.wehi.edu.au/subread-package/) (tested v1.6.2)
 - [ViennaRNA](https://www.tbi.univie.ac.at/RNA/#download) (tested v2.4.14)
@@ -63,6 +63,19 @@ The R packages *data.table*, *glmpca*, *ggplot2*, *ggdendro* and *MASS* are all 
     install.packages("ggplot2")
     install.packages("ggdendro")
     install.packages("MASS")
+
+For convenience, both slidr.sh and sloppr.sh contain a function at the beginning of the script that loads dependencies:
+
+    function load_dependencies {
+	    # ensure that all dependencies are in PATH
+	    echo -e "#\n$(timestamp) >>> Loading dependencies"
+	    module load hisat2-2.1.0
+	    module load samtools-1.9
+	    export PATH="$PATH:~/apps/ViennaRNA-2.4.14/bin"
+	    ...
+	}
+
+This is particularly useful when using an HPC. Please edit/remove the content of this function according to your machine configuration.
 
 <a name="quickstart"></a>
 ### Quick start with example data
@@ -85,11 +98,11 @@ The script generates all input files and runs basic analyses, supplying the geno
 
     >Cel-SL2
 
-The on-screen SLIDR results consist of the expected SL1 and SL2 sequences, assembled from 159-3288 reads, encoded by 1-10 SL RNA genes and *trans*-spliced to 67-764 genes:
+The on-screen SLIDR results consist of the expected SL1 and SL2 sequences, assembled from 161-3289 reads, encoded by 1-10 SL RNA genes and *trans*-spliced to 68-765 genes:
 
                     Sequence Reads SL_RNA_Genes SLTS_Genes
-      GGTTTAATTACCCAAGTTTGAG  3288       10           764
-     GGTTTTAACCCAGTTTAACCAAG   159        1            67
+      GGTTTAATTACCCAAGTTTGAG  3289       10           765
+     gGTTTTAACCCAGTTTAACCAAG   161        1            68
 
 The on-screen SLOPPR results detail expectedly low SL-trans-splicing rates (5.14 %) and 84 predicted operons using SL2 as a polycistron resolver:
 

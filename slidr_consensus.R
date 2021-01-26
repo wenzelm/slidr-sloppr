@@ -30,7 +30,9 @@ m <- fread(cmd=paste0("zcat '", filterin, "'"),
 		col.names=c("Donor_Region","Read","Centroid","Representative","Chrom_Tail","Pos_Tail",
 					"BLASTN_Match","Outron_Overlap","Chrom_Gene","Pos_Gene","Acceptor_Region",
 					"Loops","MFE_Frequency","Ensemble_Diversity"))
+m$Read <- gsub("aln[^_]*_", "", m$Read)
 m$Outron_Overlap[m$Outron_Overlap=="-"] <- ""
+m$Tail <- paste0(m$BLASTN_Match, m$Outron_Overlap)
 m$Loops <- sapply(gregexpr("\\(\\.+\\)", m$Loops), function(x) length(attr(x, "match.length")))
 setkeyv(m, c("Centroid", "BLASTN_Match", "Outron_Overlap"))
 
@@ -45,22 +47,43 @@ rm(hq)
 cat(paste(length(unique(m$Read)), "reads loaded\n"))
 
 # 3) resolve splice acceptor site
-#if(acc!="") {
-	acc.len <- nchar(gsub("\\[[^][]*\\]", ".", acc))
-	m$Acceptor.Splicesite <- substring(m$Acceptor_Region, nchar(m$Outron_Overlap)+1, nchar(m$Outron_Overlap)+acc.len)
-	# additional sanity check: is the upstream outron sequence identical to Outron_Overlap from the tail?
-	#clusterExport(cl=clust, varlist="acc.len")
-	ovl <- substring(m$Acceptor_Region, acc.len+1, acc.len+nchar(m$Outron_Overlap))
-	m$Acceptor.Splicesite[ovl!=m$Outron_Overlap] <- "#NA#"
-	m <- m[grep(paste0("^", acc, "$"), m$Acceptor.Splicesite),]
-	cat(paste0(length(unique(m$Read)), " reads with splice acceptor site (", acc, ")\n"))
-#}
+acc.len <- nchar(gsub("\\[[^][]*\\]", ".", acc))
+m$Acceptor.Splicesite <- substring(m$Acceptor_Region, nchar(m$Outron_Overlap)+1, nchar(m$Outron_Overlap)+acc.len)
+
+# additional sanity check: is the upstream outron sequence identical to Outron_Overlap from the tail?
+ovl <- substring(m$Acceptor_Region, acc.len+1, acc.len+nchar(m$Outron_Overlap))
+m$Acceptor.Splicesite[ovl!=m$Outron_Overlap] <- "#NA#"
+m <- m[grep(paste0("^", acc, "$"), m$Acceptor.Splicesite),]
+cat(paste0(length(unique(m$Read)), " reads with splice acceptor site (", acc, ")\n"))
 
 # 4) correct genomic positions using Outron_Overlap
 # resolve 3' position of SL 
 # Pos_Tail is the 3' position of the tail (5' position can be truncated depending on tail)
-m$Tail <- paste0(m$BLASTN_Match, m$Outron_Overlap)
+strand <- regmatches(m$Pos_Tail, regexpr("\\([\\+\\-]\\)", m$Pos_Tail))
+offs <- nchar(m$Outron_Overlap)
+pos <- sapply(strsplit(m$Pos_Tail, "[-(]"), function(x) {
+	if(length(x)==3) return(x[1])
+	if(length(x)==4) return(x[2])
+})
+m$Pos_Tail <- paste0(as.numeric(pos) + (1-grepl("\\-", strand)*2)*offs, strand)
+
+# need to shift 5' gene position by overlap
+# new position is location of splice acceptor site 
+strand <- regmatches(m$Pos_Gene, regexpr("\\([\\+\\-]\\)", m$Pos_Gene))
+pos <- sapply(strsplit(m$Pos_Gene, "[-(]"), function(x) {
+	if(length(x)==3) return(x[1])
+	if(length(x)==4) return(x[2])
+})
+neg <- grepl("\\-", strand)
+m$Pos_Gene <- paste0(as.numeric(pos) + (1-neg*2)*offs + 1 -neg*(acc.len+1),
+					"-",
+					as.numeric(pos) + (1-neg*2)*offs + (1-neg)*acc.len,
+					strand)
+
+old <- function() {
 m$Pos_Tail <- apply(m, 1, function(rd){
+#m$Pos_Tail <- do.call(c, mclapply(mc.cores=ncores, 1:nrow(m), function(rd){
+#	rd <- unlist(m[rd,])
 	strand <- regmatches(rd["Pos_Tail"], regexpr("\\([\\+\\-]\\)", rd["Pos_Tail"]))
 	pos <- unlist(strsplit(rd["Pos_Tail"], "[-(]"))[1:2]
 	offs <- nchar(rd["Outron_Overlap"])
@@ -70,22 +93,22 @@ m$Pos_Tail <- apply(m, 1, function(rd){
 	#if(strand=="(-)") newpos <- paste0(as.numeric(pos[2])-offs-2, "-", as.numeric(pos[2])-offs, strand)
 	newpos
 })
-
-# need to shift 5' gene position by overlap
-# new position is location of splice acceptor site 
 m$Pos_Gene <- apply(m, 1, function(rd){
+#m$Pos_Gene <- do.call(c, mclapply(mc.cores=ncores, 1:nrow(m), function(rd){
+#	rd <- unlist(m[rd,])
 	strand <- regmatches(rd["Pos_Gene"], regexpr("\\([\\+\\-]\\)", rd["Pos_Gene"]))
 	pos <- unlist(strsplit(rd["Pos_Gene"], "[-(]"))[1:2]
 	offs <- nchar(rd["Outron_Overlap"])
 	#if(strand=="(+)") newpos <- paste0(as.numeric(pos[1])+offs, strand)
 	#if(strand=="(-)") newpos <- paste0(as.numeric(pos[2])-offs, strand)
-	if(strand=="(+)") newpos <- paste0(as.numeric(pos[1])+offs+1, "-", as.numeric(pos[1])+offs+length(acc)+1, strand)
-	if(strand=="(-)") newpos <- paste0(as.numeric(pos[2])-offs-length(acc), "-", as.numeric(pos[2])-offs, strand)
+	if(strand=="(+)") newpos <- paste0(as.numeric(pos[1])+offs+1, "-", as.numeric(pos[1])+offs+acc.len, strand)
+	if(strand=="(-)") newpos <- paste0(as.numeric(pos[2])-offs-acc.len, "-", as.numeric(pos[2])-offs, strand)
 	newpos
 })
-
 # 5) keep reads where the SL gene is at least 1000bp away from trans-spliced gene
 m$Distance <- apply(m, 1, function(rd){
+#m$Distance <- do.call(c, mclapply(mc.cores=ncores, 1:nrow(m), function(rd){
+#	rd <- unlist(m[rd,])
 	if(rd["Chrom_Tail"] != rd["Chrom_Gene"]) {	# different chromosomes; easy
 		di <- Inf
 	} else {	# same chromosomes
@@ -103,6 +126,17 @@ m$Distance <- apply(m, 1, function(rd){
 	}
 	di
 })
+}
+
+# 5) keep reads where the SL gene is at least 1000bp away from trans-spliced gene
+# distance between tail and gene
+m$Distance <- abs(as.numeric(gsub("\\(.*", "", m$Pos_Tail))-as.numeric(gsub("\\-.*", "", m$Pos_Gene)))
+# different chromosomes or different strands => Infite distance
+dif <- (m$Chrom_Tail!=m$Chrom_Gene) | 
+	  (regmatches(m$Pos_Tail, regexpr("\\([\\+\\-]\\)", m$Pos_Tail)) != 
+	   regmatches(m$Pos_Gene, regexpr("\\([\\+\\-]\\)", m$Pos_Gene)))
+m$Distance[dif] <- Inf
+
 m <- subset(m, Distance>1000)
 cat(paste(length(unique(m$Read)), "reads with plausible SLTS pattern (>1 kbp between donor and acceptor site)\n"))
 
