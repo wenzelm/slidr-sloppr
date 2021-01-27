@@ -56,13 +56,14 @@ Full descriptions of the implementation are detailed in the preprint published a
 - [ViennaRNA](https://www.tbi.univie.ac.at/RNA/#download) (tested v2.4.14)
 - [R](https://www.r-project.org/) (tested v3.6.0)
 
-The R packages *data.table*, *glmpca*, *ggplot2*, *ggdendro* and *MASS* are all available on CRAN and can be installed using `install.packages()` within the R console:
+The R packages *data.table*, *glmpca*, *ggplot2*, *ggdendro*, *MASS* and *reshape2* are all available on CRAN and can be installed using `install.packages()` within the R console:
 
-    install.packages("glmpca")
     install.packages("data.table")
+    install.packages("glmpca")
     install.packages("ggplot2")
     install.packages("ggdendro")
     install.packages("MASS")
+	install.packages("reshape2")
 
 For convenience, both slidr.sh and sloppr.sh contain a function at the beginning of the script that loads dependencies:
 
@@ -298,6 +299,9 @@ Minimum bp from 3' end of SL required to detect SL tail in read (default: 8). In
 Maximum error rate for SL tail matching (default: 0.09). The default error rate requires no mismatches for tails up to 10 bp total length and allows for 1 mismatch for each 10 bp additional length (0-10 bp: 0; 11-21 bp: 1; 22-32 bp: 2; 33-40 bp: 3).
 
 `-f <chr>`
+Feature ID field in GFF/GTF annotations used for counting reads. Read are counted against exons by default but if the genome annotations miss exon features, this option should be set to CDS instead. 
+
+`-F <chr>`
 Meta-feature ID field in GFF/GTF annotations used for summarising read counts. Reads are quantified against gene annotations (gene_id) by default, but some genome annotations may require to set a different meta-feature ID, for example transcript_id. 
 
 <a name="operonprediction"></a>
