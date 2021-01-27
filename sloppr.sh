@@ -52,7 +52,8 @@ function printhelp {
 	echo -e '#    -s <file>\tPath to SL sequences (FASTA)'
 	echo -e "#    -n <num>\tMinimum 3' SL overlap with 5' read end (default: 8)"
 	echo -e "#    -e <num>\tMaximum error rate for nucleotide matching (default: 0.09)"
-	echo -e "#    -f <chr>\tMeta-feature ID for read quantification (default: gene_id)"
+	echo -e "#    -f <chr>\tFeature ID for read quantification (default: exon)"
+	echo -e "#    -F <chr>\tMeta-feature ID for read quantification (default: gene_id)"
 	echo -e "#\n# Operon prediction:"
 	echo -e "#    -z <chr>\t[geo|sum|median] Method for aggregating SL counts across libraries (default: geometric mean [geo])"
 	echo -e "#    -0\t\tKeep libraries with zero counts when aggregating SL counts (default: remove zeros)"
@@ -87,7 +88,8 @@ zero="remove"
 slrr="infinity"
 upstream="no"
 dist="infinity"
-featureid="gene_id"
+metafeatureid="gene_id"
+featureid="exon"
 
 # parse command-line options
 cmdline="sloppr.sh"
@@ -129,6 +131,9 @@ do
 		shift; shift ;;
 		-e)		err=$2
 				cmdline+=" -e $2"
+		shift; shift ;;
+		-F)		metafeatureid=$2
+				cmdline+=" -F $2"
 		shift; shift ;;
 		-f)		featureid=$2
 				cmdline+=" -f $2"
@@ -183,7 +188,8 @@ function print_summary {
 	echo -e "#   > SL sequences\t\t $sls"
 	echo -e "#   > Minimum SL tail\t\t $slength"
 	echo -e "#   > Error rate\t\t $err"
-	echo -e "#   > Meta-feature ID\t\t $featureid"
+	echo -e "#   > Feature ID\t\t $featureid"
+	echo -e "#   > Meta-feature ID\t\t $metafeatureid"
 	echo -e "#\n# Operon prediction:"
 	echo -e "#   > SL-count aggregation\t $agg"
 	echo -e "#   > Zero SL counts\t\t $zero"
@@ -374,7 +380,7 @@ function genome_align {
 }
 
 function infer_strandedness {
-	if [ "$stranded" == "x" ]; then
+	if [[ ! "$stranded" =~ [012] ]]; then
 		# infer strandedness
 		# + strand
 		gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="+"' $gtf | bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 100 -i -)
@@ -405,7 +411,7 @@ function quantify_background {
 	if [ ! -f $bam.fc.txt ]; then
 		echo "$(timestamp) Quantifying background gene coverage ..."	
 		featureCounts -a $gtf -o $bam.fc.txt \
-			-t exon -g $featureid -s $stranded -p -C -O -M -T $threads \
+			-t $featureid -g $metafeatureid -s $stranded -p -C -O -M -T $threads \
 			$bam > $outdir/$lib/log_featureCounts.bg.txt 2>&1
 	fi
 	
@@ -414,7 +420,7 @@ function quantify_background {
 	if [ ! -f $outdir/$lib/untrimmed.bam.txt ]; then
 		echo "$(timestamp) Quantifying untrimmed reads ..."	
 		featureCounts -a $gtf -o $outdir/$lib/untrimmed.bam.txt \
-			-t exon -g $featureid -s $(($stranded>0)) -p -C -O -M -T $threads \
+			-t $featureid -g $metafeatureid -s $(($stranded>0)) -p -C -O -M -T $threads \
 			$outdir/$lib/untrimmed.bam > $outdir/$lib/log_featureCounts.untrimmed.txt 2>&1
 	fi
 }
@@ -576,20 +582,20 @@ mkdir -p $ctdir
 if [ ! -f $ctdir/SL.featureCounts.genes.raw.txt ]; then
 	echo "$(timestamp) Quantifying SL reads against genes ..."
 	featureCounts -a $gtf -o $ctdir/SL.featureCounts.genes.raw.txt \
-		-t exon -g $featureid -s 1 -O -M -T $threads \
+		-t $featureid -g $metafeatureid -s 1 -O -M -T $threads \
 		$outdir/*/*.fc.bam > $ctdir/log_featureCounts.genes.txt 2>&1
 fi
 if [ ! -f $ctdir/SL.featureCounts.exons.raw.txt ]; then
 	echo "$(timestamp) Quantifying SL reads against exons ..."	
 	featureCounts -a $outdir/annotations.unique_exons.gtf -o $ctdir/SL.featureCounts.exons.raw.txt \
-		-t exon -g $featureid -f -s 1 -O -M -T $threads \
+		-t $featureid -g $metafeatureid -f -s 1 -O -M -T $threads \
 		$outdir/*/*.fc.bam > $ctdir/log_featureCounts.exons.txt 2>&1
 fi
 # non-SL counts (background end-to-end alignments)
 #if [ ! -f $outdir/counts/bg.featureCounts.genes.raw.txt ]; then
 #	echo "$(timestamp) Quantifying background gene coverage ..."	
 #	featureCounts -a $gtf -o $outdir/counts/bg.featureCounts.genes.raw.txt \
-#		-t exon -g $featureid -s $stranded -p -C -O -M -T $threads \
+#		-t $featureid -g $metafeatureid -s $stranded -p -C -O -M -T $threads \
 #		$outdir/*/end2end_pre-align.bam > $outdir/counts/log_featureCounts.bg.genes.txt 2>&1
 #fi
 if [ ! -f $ctdir/bg.featureCounts.genes.raw.txt ]; then

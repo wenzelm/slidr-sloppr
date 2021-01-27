@@ -22,7 +22,7 @@ function load_dependencies {
 	export PATH="$PATH:/uoa/home/s02mw5/sharedscratch/apps/ViennaRNA-2.4.14/bin"
 }
 
-title="#\n# SLIDR - Spliced Leader IDentification from RNA-Seq data\n# Version 1.1\n#"
+title="#\n# SLIDR - Spliced Leader IDentification from RNA-Seq data\n# Version 1.1rev1\n#"
 
 function printhelp {
 	echo -e "$title"
@@ -419,7 +419,7 @@ function uppercasenuc {
 }
 
 function infer_strandedness {
-	if [ "$stranded" == "x" ]; then
+	if [[ ! "$stranded" =~ [012] ]]; then
 		# infer strandedness
 		if [ "$gtf" == "" ]; then
 			stranded=0
@@ -592,7 +592,7 @@ clusterprefix=$tailprefix.cluster
 if [ ! -f $clusterprefix.centroids.fa.gz ]; then
 	echo "$(timestamp) Clustering tails ..."
 	# --wordsize 8 --minwordmatches 1000 ensures high match sensitivity
-	# --sizeorder --maxaccepts 1000 --maxrejects 1000 ensures that short tails are given to the most abundant sequences
+	# --sizeorder --maxaccepts 10000 --maxrejects 10000 ensures that short tails are given to the most abundant sequences
 	zcat $tailprefix.derep.fa.gz \
 	| vsearch --cluster_fast - --qmask none \
 		--uc $clusterprefix.out --centroids $clusterprefix.centroids.fa \
@@ -601,7 +601,7 @@ if [ ! -f $clusterprefix.centroids.fa.gz ]; then
 		--minseqlength $tlength --threads $threads \
 		--id 1.0 --iddef 0 --rightjust \
 		--wordlength 8 --minwordmatches 1000 \
-		--sizeorder --maxaccepts 0 --maxrejects 0 \
+		--sizeorder --maxaccepts 10000 --maxrejects 10000 \
 		> $clusterprefix.log-vsearch.txt 2>&1
 	awk '$1=="H"{print $10, $9}$1=="S"{print $9, $9}' OFS="\t" $clusterprefix.out \
 		| gzip > $clusterprefix.clusterinfo.txt.gz

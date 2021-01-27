@@ -26,8 +26,8 @@ library("glmpca")
 #				11) output directory
 
 args = commandArgs(trailingOnly=TRUE)
-#args <- c("sloppr_Cint_test/counts/SL.featureCounts.genes.clean.txt", 
-#			"Cint/sl.fa", 
+#args <- c("2-counts/SL.featureCounts.genes.clean.txt", 
+#			"sl.fa", 
 #			"", 
 #		"infinity", 
 #			"no",
@@ -48,7 +48,6 @@ agg <- args[8]
 zero <- args[9]
 threads <- as.numeric(args[10])
 wdir <- args[11]
-
 
 # colours for plotting
 colours.cl <- c(`1`="gray30", `2`="#FF9100", 
