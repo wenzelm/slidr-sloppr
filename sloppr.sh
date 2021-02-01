@@ -18,7 +18,7 @@ function load_dependencies {
 	module load subread-1.6.2
 }
 
-title="#\n# SLOPPR - Spliced-Leader-informed Operon Prediction from RNA-Seq data\n# Version 1.1\n#"
+title="#\n# SLOPPR - Spliced-Leader-informed Operon Prediction from RNA-Seq data\n# Version 1.1.1\n#"
 
 function printhelp {
 	echo -e "$title"
@@ -30,6 +30,7 @@ function printhelp {
 	echo -e '#    -o <dir>\tPath to output directory (default: "SLOPPR_[date+time]")'
 	echo -e "#    -p <chr>\tPrefix for predicted operons (default: OP)"
 	echo -e '#    -c <num>\tThreads (default: all available cores)'
+	echo -e '#    -T <num>\tTEMP directory (default: $TMPDIR)'
 	echo -e '#    -h\t\tPrint this help page'
 	echo -e "#\n# Reference assembly:"
 	echo -e '#    -g <file>\tPath to genome assembly (FASTA)'
@@ -168,6 +169,9 @@ do
 	    -c)		threads=$2
 				cmdline+=" -c $2"
 		shift; shift;;
+		-T)		export TMPDIR=$2
+				cmdline+=" -T $2"
+		shift; shift;;
 	    -)	            # unknown option
 		shift; shift;;
 	esac
@@ -181,6 +185,7 @@ function print_summary {
 	echo -e "#   > Threads\t\t\t $threads"
 	echo -e "#   > Operon prefix\t\t $opp"
 	echo -e "#   > Reference operons\t\t $refops"
+	echo -e "#   > TEMP directory\t\t $TMPDIR"
 	echo -e "#\n# Reference:"
 	echo -e "#   > Genome\t\t\t $genome"
 	echo -e "#   > Annotations\t\t $ann"
@@ -311,10 +316,10 @@ fi
 # non-redundant exons
 if [ ! -f $outdir/annotations.unique_exons.gtf ]; then
 	echo "$(timestamp) Extracting unique exons from GTF ..."
-	grep "\sexon\s" $gtf \
+	grep "\s$featureid\s" $gtf \
 		| bedtools sort -i stdin \
 		| bedtools merge -s -c 4,5,7,9 -o min,max,first,first -i stdin \
-		| awk -F'\t' '{print $1, ".", "exon", $4, $5, ".", $6, ".", $7}' OFS="\t" \
+		| awk -F'\t' -v f="$featureid" '{print $1, ".", f, $4, $5, ".", $6, ".", $7}' OFS="\t" \
 		> $outdir/annotations.unique_exons.gtf
 fi
 

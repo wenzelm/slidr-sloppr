@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 
-library(parallel)
-library(data.table)
+library("parallel")
+library("data.table")
 
 args = commandArgs(trailingOnly=TRUE)
 filterin <- args[1]
@@ -26,11 +26,11 @@ setDTthreads(ncores)
 # 1) read merged filter file
 #m <- fread(cmd=paste0("gunzip -c ", file.path(wdir, "2-RNA_filters", "SL_merged_filters.txt.gz")), 
 m <- fread(cmd=paste0("zcat '", filterin, "'"), 
-		sep="\t", header=F, showProgress=F,
-		col.names=c("Donor_Region","Read","Centroid","Representative","Chrom_Tail","Pos_Tail",
+		sep="\t", header=F, showProgress=F, 
+		col.names=c("Donor_Region","Read","Centroid","Representative","Size", "Chrom_Tail","Pos_Tail",
 					"BLASTN_Match","Outron_Overlap","Chrom_Gene","Pos_Gene","Acceptor_Region",
 					"Loops","MFE_Frequency","Ensemble_Diversity"))
-m$Read <- gsub("aln[^_]*_", "", m$Read)
+#m$Read <- gsub("aln[^_]*_", "", m$Read)
 m$Outron_Overlap[m$Outron_Overlap=="-"] <- ""
 m$Tail <- paste0(m$BLASTN_Match, m$Outron_Overlap)
 m$Loops <- sapply(gregexpr("\\(\\.+\\)", m$Loops), function(x) length(attr(x, "match.length")))
@@ -39,7 +39,7 @@ setkeyv(m, c("Centroid", "BLASTN_Match", "Outron_Overlap"))
 
 # 2) add SL cluster ID
 hq <- fread(cmd=paste0("zcat '", filterin, ".clusterinfo.txt.gz'"), sep="\t", header=F, showProgress=F,
-					colClasses="character",	
+					colClasses="character",
 					col.names=c("Cluster", "Centroid", "BLASTN_Match", "Outron_Overlap"),
 					key=c("Centroid", "BLASTN_Match", "Outron_Overlap"))
 m <- merge(unique(hq), m, by=c("Centroid", "BLASTN_Match", "Outron_Overlap"), sort=F, allow.cartesian=TRUE)

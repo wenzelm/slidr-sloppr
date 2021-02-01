@@ -7,22 +7,23 @@ function timestamp {
 
 function load_dependencies {
 	# ensure that all dependencies are in PATH
+	# MODIFY/DELETE THESE CALLS ACCORDING TO YOUR MACHINE
 	echo -e "#\n$(timestamp) >>> Loading dependencies"
+	export PATH="$PATH:/uoa/home/s02mw5/sharedscratch/apps/ViennaRNA-2.4.14/bin"
+	export PATH=$PATH:/uoa/home/s02mw5/sharedscratch/slidr/toy/vsearch-2.15.1/bin/
 	module load hisat2-2.1.0
 	module load samtools-1.9
 	module load bedtools-2.28.0
 	module load seqtk-1.3
-	module load vsearch-2.4.3	
 	module load blast-2.9.0
 	module load r-data.table
 	module load r-3.6.1
 	module load gffread-0.11.4
 	module load cutadapt-2.3
 	module load bowtie2-2.3.5
-	export PATH="$PATH:/uoa/home/s02mw5/sharedscratch/apps/ViennaRNA-2.4.14/bin"
 }
 
-title="#\n# SLIDR - Spliced Leader IDentification from RNA-Seq data\n# Version 1.1rev1\n#"
+title="#\n# SLIDR - Spliced Leader IDentification from RNA-Seq data\n# Version 1.1.2\n#"
 
 function printhelp {
 	echo -e "$title"
@@ -33,6 +34,7 @@ function printhelp {
 	echo -e '#    -o <dir>\tPath to output directory (default: "SLIDR_[date+time]")'
 	echo -e '#    -p <chr>\tPrefix for predicted SL sequences (default: SL)'
 	echo -e '#    -c <num>\tThreads (default: all available cores)'
+	echo -e '#    -T <num>\tTEMP directory (default: $TMPDIR)'
 	echo -e '#    -h\t\tPrint this help page'
 	echo -e "#\n# Reference assembly:"
 	echo -e '#    -g <file>\tPath to genome assembly (FASTA)'
@@ -165,6 +167,9 @@ do
 	    -c)		threads=$2
 				cmdline+=" -c $2"
 		shift; shift;;
+		-T)		export TMPDIR=$2
+				cmdline+=" -T $2"
+		shift; shift;;
 	    -)	            # unknown option
 		shift; shift;;
 	esac
@@ -177,6 +182,7 @@ function print_summary {
 	echo -e "#   > Output directory\t $outdir"
 	echo -e "#   > SL name prefix\t $slprefix"
 	echo -e "#   > Threads\t\t $threads"
+	echo -e "#   > TEMP directory\t $TMPDIR"
 	echo -e "#\n# Reference:"
 	echo -e "#   > Genome\t\t $genome"
 	echo -e "#   > Annotations\t $ann"
@@ -560,17 +566,21 @@ mkdir -p $outdir/1-tails
 # collect all tails
 if [ ! -f $outdir/1-tails/tails-x$tscale.fa.gz ]; then
 	echo "$(timestamp) Collecting tails ..."
-	cat $outdir/1-library_*/alignments-x$tscale.bam.tails*p.fa.gz > $outdir/1-tails/tails-x$tscale.fa.gz
+	cat $outdir/1-library_*/alignments-x$tscale.bam.tails*p.fa.gz \
+		> $outdir/1-tails/tails-x$tscale.fa.gz
 fi
 
 # dereplicate 
+# remove sequences with Ns
 tailprefix=$outdir/1-tails/tails-x$tscale-l$tlength
 if [ ! -f $tailprefix.derep.fa.gz ]; then
 	echo "$(timestamp) Dereplicating tails ..."
 	zcat $outdir/1-tails/tails-x$tscale.fa.gz \
+	| awk '!/^>/$0~"N"{$0=""}{print}' \
 	| vsearch --derep_fulllength - \
 		--output $tailprefix.derep.fa \
 		--uc $tailprefix.derep.out.txt \
+		--sizeout \
 		--minseqlength $tlength \
 		--threads $threads \
 		> $tailprefix.derep.log-vsearch.txt 2>&1
@@ -596,18 +606,18 @@ if [ ! -f $clusterprefix.centroids.fa.gz ]; then
 	zcat $tailprefix.derep.fa.gz \
 	| vsearch --cluster_fast - --qmask none \
 		--uc $clusterprefix.out --centroids $clusterprefix.centroids.fa \
-		--consout $clusterprefix.consensus.fa \
-		--clusterout_sort \
+		--msaout $clusterprefix.msa.fa \
+		--clusterout_sort --sizein --sizeout \
 		--minseqlength $tlength --threads $threads \
 		--id 1.0 --iddef 0 --rightjust \
 		--wordlength 8 --minwordmatches 1000 \
-		--sizeorder --maxaccepts 10000 --maxrejects 10000 \
+		--sizeorder --maxaccepts 0 --maxrejects 0 \
 		> $clusterprefix.log-vsearch.txt 2>&1
 	awk '$1=="H"{print $10, $9}$1=="S"{print $9, $9}' OFS="\t" $clusterprefix.out \
-		| gzip > $clusterprefix.clusterinfo.txt.gz
+		| sed 's/;size=[0-9]\+//g' | gzip > $clusterprefix.clusterinfo.txt.gz
 	gzip $clusterprefix.out
 	gzip $clusterprefix.centroids.fa
-	gzip $clusterprefix.consensus.fa
+	gzip $clusterprefix.msa.fa
 	
 	#cd-hit-est -i $outdir/tails/tails.unique.fa -o "$outdir/tails/02_LQ_clusters.fa" \
 	#	-c 1.0 -G 0 -aS 0.1 -aL 0.1 \
@@ -626,7 +636,7 @@ mkdir -p $outdir/2-RNA_filters
 echo "$(timestamp) >>> STAGE 2: SL RNA identification"
 # map to the genome or transcriptome
 # ensure that the 3' end of the tail is aligned (5' end can contain noise, so not important) $8==$14
-# keep the longest match(es) for each tail:
+# keep the longest match(es) for each tail?: no
 # awk '$8==$14{ if($1==q){if($4==l)print} else {q=$1;l=$4; print} }'
 
 if [ ! "$genome" == "" ]; then
@@ -674,7 +684,8 @@ if [ ! -f "$smout" ]; then
 	 | awk -F'\t|::' -v p="${donor}${sm}" -v l="$rlength" -v x="$overlap" \
 		'{  s=match(toupper($4), toupper(p)); o=toupper(substr($4, 1, s-1)); if(o==""){o=""}; gsub(":", "\t", $3); 
 			if(s>0 && s<=(x+1)){print $2, $3, $1, o, $1""o""substr(toupper($4),RSTART,RLENGTH+l)}}' OFS="\t" \
-		| gzip > "$smout"
+		| sed 's/;size=[0-9]\+/\t&/g' | gzip > "$smout"
+		# have the ;size= information in a separate column to facilitate read ID merging later
 	nsm=$(zcat "$smout" | wc -l)
 	nbl=$(zcat $blastprefix.out.gz | wc -l)
 	echo "$(timestamp) Identified $nsm donor splice sites and Sm binding sites ($((100*$nsm/$nbl))% of alignments)"
@@ -753,7 +764,7 @@ if [ ! -f "$rnafout" ]; then
 	# we want the Sm site to be unpaired, so need to add a constraint string (...xxxx) below the sequence
 	donlen=$(($(echo "$donor" | sed 's/\[[^][]*\]/./g' | wc -m)-1))
 	smlen=$(($(echo "$sm" | sed -e 's/\[[^][]*\]/./g' -e 's/{[^}{]*}/./g' | wc -m)-2))
-	zcat "$smout" | cut -f 6 | sort | uniq \
+	zcat "$smout" | cut -f 7 | sort | uniq \
 		| awk -v d="$donlen" -v s="$smlen" -v p="${donor}${sm}" '{match(toupper($0), p); 
 			print ">"$0"\n"$0; 
 			c=1; if(s<0){s=0};
@@ -785,21 +796,38 @@ if [ ! -f $cand ]; then
 	#echo -e "Donor_Region\tRead\tCentroid\tRepresentative\tChrom_Tail\tPos_Tail\tBLASTN_Match\tOutron_Overlap\tChrom_Gene\tPos_Gene\tAcceptor_Region\tLoops\tMFE_Frequency\tEnsemble_Diversity" \
 	#	> $outdir/2-RNA_filters/SL_merged_filters.txt
 	join -e '-' -t "$(printf '\t')" -1 1 -2 2 \
-		<(zcat $tailprefix.derep.clusterinfo.txt.gz | sort -S50% -k1,1 | uniq) \
-		<(zcat $clusterprefix.clusterinfo.txt.gz | sort -S50% -k 2,2 | uniq) \
-		| sort -S50% -k3,3 | uniq \
-	| join -e '-' -t "$(printf '\t')" -1 3 -2 1 - <(zcat "$smout" | sort -S50% -k1,1 | uniq) \
-		| sort -S50% -k3,3 | uniq \
-	| join -e '-' -t "$(printf '\t')" -1 3 -2 1 - <(zcat "$spliceout" | sort -S50% -k1,1 | uniq) \
-		| sort -S50% -k 8,8 | uniq \
-	| join -e '-' -t "$(printf '\t')" -1 8 -2 1 - <(zcat "$rnafout" | sort -S50% -k1,1 | uniq) \
+		<(zcat $tailprefix.derep.clusterinfo.txt.gz | \
+			sort --buffer-size=90% -t "$(printf '\t')" -k1,1) \
+		<(zcat $clusterprefix.clusterinfo.txt.gz | \
+			sort --buffer-size=90% -t "$(printf '\t')" -k 2,2) \
+		| sort -S90% -t "$(printf '\t')" -k3,3 \
+	| join -e '-' -t "$(printf '\t')" -1 3 -2 1 - \
+		<(zcat "$smout" | sort --buffer-size=90% -t "$(printf '\t')" -k1,1) \
+		| sort -S90% -t "$(printf '\t')" -k3,3 \
+	| join -e '-' -t "$(printf '\t')" -1 3 -2 1 - \
+		<(zcat "$spliceout" | sort --buffer-size=90% -t "$(printf '\t')" -k1,1) \
+		| sort -S90% -t "$(printf '\t')" -k 9,9 \
+	| join -e '-' -t "$(printf '\t')" -1 9 -2 1 - \
+		<(zcat "$rnafout" | sort --buffer-size=90% -t "$(printf '\t')" -k1,1) \
 	| gzip > $cand
 fi
+
+## more efficient?
+#join -e '-' -t "$(printf '\t')" -1 1 -2 6 <(zcat "$rnafout" | sort -t "$(printf '\t')" -S50% -k1,1 | uniq) \
+	#<(zcat "$smout" | sort -t "$(printf '\t')" -S50% -k6,6 | uniq) | sort -S50% -k5,5 \
+	
+#join -e '-' -t "$(printf '\t')" -1 1 -2 2 \
+		#<(zcat $tailprefix.derep.clusterinfo.txt.gz | sort -S50% -t "$(printf '\t')" -k1,1 | uniq) \
+		#<(zcat $clusterprefix.clusterinfo.txt.gz | sort -S50% -t "$(printf '\t')" -k 2,2 | uniq) \
+		#| sort -S50% -t "$(printf '\t')" -k3,3	
+##
+
+
 # construct SL tails and cluster them
 if [ ! -f $cand.centroids.fa.gz ]; then
 	echo "$(timestamp) Re-clustering SL candidates ..."
-	zcat $cand | awk -F'\t' '{gsub("-", "", $8); print ">"$2"::"$7"::"$8"::nl::"$7$8}' \
-		| sort | uniq | sed 's/::nl::/\n/g' | gzip > $cand.SLtails.fa.gz
+	zcat $cand | awk -F'\t' '{gsub("-", "", $9); print ">"$3"::"$8"::"$9$5"::nl::"$8$9}' \
+		| sort -S90% -t "$(printf '\t')" | uniq | sed 's/::nl::/\n/g' | gzip > $cand.SLtails.fa.gz
 	#zcat $outdir/2-RNA_filters/splice_donor_sites.txt | awk -F'\t' '{print ">"$1"::"$4"::"$5"\n"$4$5}' \
 	#	| gzip > $outdir/2-RNA_filters/SL_tails.fa.gz
 	
@@ -808,16 +836,19 @@ if [ ! -f $cand.centroids.fa.gz ]; then
 	zcat $cand.SLtails.fa.gz \
 	| vsearch --cluster_fast - --qmask none \
 		--uc $cand.clusters.out --centroids $cand.centroids.fa \
+		--msaout $cand.msa.fa \
 		--id 1.0 --iddef 0 --rightjust \
+		--clusterout_sort --sizein --sizeout \
 		--minseqlength $tlength --threads $threads \
 		--wordlength 8 --minwordmatches 1000 \
-		--sizeorder --maxaccepts 0 --maxrejects 0 \
+		--sizeout --maxaccepts 0 --maxrejects 0 \
 		> "$cand.log_vsearch-cluster.txt" 2>&1
 		
 	awk -F'::|\t' '$1~"S|H"{print $2, $9, $10, $11}' OFS="\t" $cand.clusters.out \
-		| gzip > $cand.clusterinfo.txt.gz
+		| sed 's/;size=[0-9]\+//g' | gzip > $cand.clusterinfo.txt.gz
 	gzip $cand.clusters.out
 	gzip $cand.centroids.fa
+	gzip $cand.msa.fa
 	#gzip $outdir/2-RNA_filters/SL_merged_filters.txt
 		
 	#grep "^>" $outdir/2-RNA_filters/SL_clusters.msa | \

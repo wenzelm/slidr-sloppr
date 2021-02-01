@@ -99,12 +99,12 @@ The script generates all input files and runs basic analyses, supplying the geno
 
     >Cel-SL2
 
-The on-screen SLIDR results consist of the expected SL1 and SL2 sequences, assembled from 161-3289 reads, encoded by 1-10 SL RNA genes and *trans*-spliced to 68-765 genes:
+The on-screen SLIDR results consist of the expected SL1 and SL2 sequences, assembled from 165-6568 reads, encoded by 1-10 SL RNA genes and *trans*-spliced to 67-1216 genes:
 
                     Sequence Reads SL_RNA_Genes SLTS_Genes
-      GGTTTAATTACCCAAGTTTGAG  3289       10           765
-     gGTTTTAACCCAGTTTAACCAAG   161        1            68
-
+      GGTTTAATTACCCAAGTTTGAG  6568           10       1216
+     GGTTTTAACCCAGTTTAACCAAG   165            1         67
+	 
 The on-screen SLOPPR results detail expectedly low SL-trans-splicing rates (5.14 %) and 84 predicted operons using SL2 as a polycistron resolver:
 
     Numbers of genes receiving SLs:
@@ -142,6 +142,9 @@ Name prefix for predicted SLs or operons (default: SL for SLIDR and OP for SLOPP
 
 `-c <num>`
 Threads (default: all available cores obtained by `nproc`)
+
+`-T <dir>`
+Path to directory for temporary files. Default is your system's TMPDIR; specifying this option will change TMPDIR. For running SLIDR, it is highly recommended to choose a large TMP directory to avoid bottlenecks associated with the default `/tmp` partition.
 
 <a name="input"></a>
 #### RNA-Seq data input
