@@ -272,7 +272,7 @@ function sanity_check {
 	fi
 }
 # first sweep of checks
-sanity_check
+#sanity_check
 
 # if library design was supplied, sanity check that, too:
 if [ ! "$design" == "" ] && ([ ! "$bam" == "" ] || [ ! "$R1" == "" ] || [ ! "$R2" == "" ]); then
@@ -282,7 +282,7 @@ if [ ! "$design" == "" ]; then
 	while IFS='#' read lib stranded R1 R2 clean bam
 	do
 		echo "#   * $lib (-r $stranded) -1 $R1 -2 $R2 $clean $bam"
-		sanity_check
+		#sanity_check
 	done < <(tr -d '#' < $design | tr '\t' '#' )
 fi
 
@@ -797,18 +797,18 @@ if [ ! -f $cand ]; then
 	#	> $outdir/2-RNA_filters/SL_merged_filters.txt
 	join -e '-' -t "$(printf '\t')" -1 1 -2 2 \
 		<(zcat $tailprefix.derep.clusterinfo.txt.gz | \
-			sort --buffer-size=90% -t "$(printf '\t')" -k1,1) \
+			sort --buffer-size=90% --batch-size=100 -t "$(printf '\t')" -k1,1) \
 		<(zcat $clusterprefix.clusterinfo.txt.gz | \
-			sort --buffer-size=90% -t "$(printf '\t')" -k 2,2) \
+			sort --buffer-size=90% --batch-size=100 -t "$(printf '\t')" -k 2,2) \
 		| sort -S90% -t "$(printf '\t')" -k3,3 \
 	| join -e '-' -t "$(printf '\t')" -1 3 -2 1 - \
-		<(zcat "$smout" | sort --buffer-size=90% -t "$(printf '\t')" -k1,1) \
+		<(zcat "$smout" | sort --buffer-size=90% --batch-size=100 -t "$(printf '\t')" -k1,1) \
 		| sort -S90% -t "$(printf '\t')" -k3,3 \
 	| join -e '-' -t "$(printf '\t')" -1 3 -2 1 - \
-		<(zcat "$spliceout" | sort --buffer-size=90% -t "$(printf '\t')" -k1,1) \
+		<(zcat "$spliceout" | sort --buffer-size=90% --batch-size=100 -t "$(printf '\t')" -k1,1) \
 		| sort -S90% -t "$(printf '\t')" -k 9,9 \
 	| join -e '-' -t "$(printf '\t')" -1 9 -2 1 - \
-		<(zcat "$rnafout" | sort --buffer-size=90% -t "$(printf '\t')" -k1,1) \
+		<(zcat "$rnafout" | sort --buffer-size=90% --batch-size=100 -t "$(printf '\t')" -k1,1) \
 	| gzip > $cand
 fi
 

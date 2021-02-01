@@ -30,7 +30,7 @@ m <- fread(cmd=paste0("zcat '", filterin, "'"),
 		col.names=c("Donor_Region","Read","Centroid","Representative","Size", "Chrom_Tail","Pos_Tail",
 					"BLASTN_Match","Outron_Overlap","Chrom_Gene","Pos_Gene","Acceptor_Region",
 					"Loops","MFE_Frequency","Ensemble_Diversity"))
-#m$Read <- gsub("aln[^_]*_", "", m$Read)
+m$Read <- gsub("aln[^_]*_", "", m$Read)
 m$Outron_Overlap[m$Outron_Overlap=="-"] <- ""
 m$Tail <- paste0(m$BLASTN_Match, m$Outron_Overlap)
 m$Loops <- sapply(gregexpr("\\(\\.+\\)", m$Loops), function(x) length(attr(x, "match.length")))
