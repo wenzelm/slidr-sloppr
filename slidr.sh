@@ -280,7 +280,7 @@ function sanity_check {
 	fi
 }
 # first sweep of checks
-#sanity_check
+sanity_check
 
 # if library design was supplied, sanity check that, too:
 if [ ! "$design" == "" ] && ([ ! "$bam" == "" ] || [ ! "$R1" == "" ] || [ ! "$R2" == "" ]); then
@@ -290,7 +290,7 @@ if [ ! "$design" == "" ]; then
 	while IFS='#' read lib stranded R1 R2 clean bam
 	do
 		echo "#   * $lib (-r $stranded) -1 $R1 -2 $R2 $clean $bam"
-		#sanity_check
+		sanity_check
 	done < <(tr -d '#' < $design | tr '\t' '#' )
 fi
 

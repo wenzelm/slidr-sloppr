@@ -12,10 +12,10 @@ acc <- gsub(" ", "", args[2])
 sl.prefix <- args[3]
 ncores <- as.numeric(args[4])
 
-wdir <- "slidr_Cel_SLf_final/3-results-x1.0-l8-DGC-e1-R80-DGT-S.{40,55}AC?T{4,6}G-L35-AAG-O10/"
-acc="AG"
-ncores=1
-sl.prefix="SL"
+#wdir <- "slidr_Cel_SLf_final/3-results-x1.0-l8-DGC-e1-R80-DGT-S.{40,55}AC?T{4,6}G-L35-AAG-O10/"
+#acc="AG"
+#ncores=1
+#sl.prefix="SL"
 
 # data table threads
 setDTthreads(ncores)
