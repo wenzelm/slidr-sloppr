@@ -12,10 +12,10 @@ acc <- gsub(" ", "", args[2])
 sl.prefix <- args[3]
 ncores <- as.numeric(args[4])
 
-#wdir <- "slidr_toy_data/3-results-x1.0-l8-AGC-e1-R80-DGT-S.{20,60}AT{4,6}G-L35-AAG-O10/"
-#acc="AG"
-#ncores=1
-#sl.prefix="SL"
+wdir <- "slidr_Cel_SLf_final/3-results-x1.0-l8-DGC-e1-R80-DGT-S.{40,55}AC?T{4,6}G-L35-AAG-O10/"
+acc="AG"
+ncores=1
+sl.prefix="SL"
 
 # data table threads
 setDTthreads(ncores)
@@ -231,7 +231,8 @@ invisible(summ[, writeSLTS(.SD), by=seq_len(nrow(summ))])
 SLRNA_FASTA <- function(d){
 	sl.name <- d[,Name]
 	fasta <- unique(ai[Consensus==d[,Consensus] & Maj_Consensus==TRUE, 
-		.(Chrom_Tail, Pos_Tail, Donor_Region)])[, .(ID=paste0(">", sl.name, ".", 1:.N), Donor_Region)]
+		.(Chrom_Tail, Pos_Tail, Donor_Region, Len=nchar(Donor_Region))][order(Chrom_Tail, Pos_Tail, -Len)], 
+		by=c("Chrom_Tail", "Pos_Tail"))[, .(ID=paste0(">", sl.name, ".", 1:.N), Donor_Region)]
 	fasta <- as.vector(apply(fasta, 1, paste))
 	writeLines(fasta, file.path(wdir, "SL_RNA_genes", paste0(sl.name, ".RNA_genes.fa")))
 	return(fasta)
@@ -242,9 +243,10 @@ writeLines(summ[, .(fasta=SLRNA_FASTA(.SD)), by=seq_len(nrow(summ))][,fasta],
 SLRNA_GFF <- function(d){
 	sl.name <- d[,Name]
 	gff <- unique(ai[Consensus==d[,Consensus] & Maj_Consensus==TRUE, 
-		.(Tail, Chrom_Tail, Pos_Tail, Donor_Region,
-		Strand=substr(Pos_Tail, nchar(Pos_Tail)-1, nchar(Pos_Tail)-1),
-		Stop=as.integer(gsub("\\(.\\)", "", Pos_Tail)))])[,
+		.(Tail, Chrom_Tail, Pos_Tail, Donor_Region, Len=nchar(Donor_Region))][order(Chrom_Tail, Pos_Tail, -Len)], 
+		by=c("Chrom_Tail", "Pos_Tail"))[, c('Strand', 'Stop'):=list(
+			substr(Pos_Tail, nchar(Pos_Tail)-1, nchar(Pos_Tail)-1),
+		    as.integer(gsub("\\(.\\)", "", Pos_Tail)))][,
 		c('ID', 'Start'):=list(seq(1:.N),
 		Stop-(as.integer(paste0(Strand, "1"))*nchar(Tail)))][][,
 		.(GFF=(paste(Chrom_Tail, "SLIDR", "spliced_leader_RNA", 
