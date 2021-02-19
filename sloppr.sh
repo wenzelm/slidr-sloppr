@@ -18,7 +18,7 @@ function load_dependencies {
 	module load subread-1.6.2
 }
 
-title="#\n# SLOPPR - Spliced-Leader-informed Operon Prediction from RNA-Seq data\n# Version 1.1.1\n#"
+title="#\n# SLOPPR - Spliced-Leader-informed Operon Prediction from RNA-Seq data\n# Version 1.1.2\n#"
 
 function printhelp {
 	echo -e "$title"
@@ -33,8 +33,8 @@ function printhelp {
 	echo -e '#    -T <num>\tTEMP directory (default: $TMPDIR)'
 	echo -e '#    -h\t\tPrint this help page'
 	echo -e "#\n# Reference assembly:"
-	echo -e '#    -g <file>\tPath to genome assembly (FASTA)'
-	echo -e '#    -a <file>\tPath to genome annotations (GFF/GTF)'
+	echo -e '#    -g <file>\tPath to genome assembly (FASTA[.GZ])'
+	echo -e '#    -a <file>\tPath to genome annotations (GFF/GTF[.GZ])'
 	echo -e "#\n# Single RNA-Seq library:"
 	echo -e '#    -1 <file>\tPath to R1 reads (FASTQ.GZ)'
 	echo -e '#    -2 <file>\tPath to R2 reads (FASTQ.GZ)'
@@ -303,20 +303,38 @@ print_summary >> "$outdir/0-command_summary.txt"
 #
 echo "$(timestamp) >>> STAGE 1: SL read identification"
 
-# convert GFF to GTF if required
-if [ $(echo "$ann" | grep -o "...$") == "gtf" ]; then
-	gtf=$ann
-else
-	if [ ! -f $outdir/annotations.gtf ]; then
-		echo "$(timestamp) Converting GFF to GTF ..."
-		gffread $ann -M -K -Q -C -T -o "$outdir/annotations.gtf"
+# if genome is zipped, copy and unzip
+if [ "$(file "$genome" | grep -i gzip)" ]; then
+	if [ ! -f $outdir/genome.fa ]; then
+		gunzip -c $genome > $outdir/genome.fa
 	fi
-	gtf="$outdir/annotations.gtf"	
+	genome=$outdir/genome.fa
 fi
+
+# copy annotations
+# unzip if required
+# convert GFF to GTF if required
+gtf="$outdir/annotations.gtf"
+if [ ! -f $gtf ]; then
+	echo "$(timestamp) Fetching annotations ..."
+	gropts="--force-exons --gene2exon --keep-genes -M -K -Q -C -T"
+	fform="$(file $ann)"
+	if [[ "$fform" =~ "gzip" ]] && [[ "$fform" =~ ".gtf" ]]; then
+		gunzip -c $ann > $gtf
+	elif [[ "$fform" =~ "gzip" ]] && [[ ! "$fform" =~ ".gtf" ]]; then
+		gunzip -c $ann | gffread $gropts -o $gtf
+	elif [[ ! "$fform" =~ "gzip" ]] && [[ "$fform" =~ ".gtf" ]]; then
+		cp $ann > $gtf
+	else
+		gffread $ann $gropts -o $gtf
+	fi
+fi
+ann=$gtf
+
 # non-redundant exons
 if [ ! -f $outdir/annotations.unique_exons.gtf ]; then
-	echo "$(timestamp) Extracting unique exons from GTF ..."
-	grep "\s$featureid\s" $gtf \
+	echo "$(timestamp) Extracting unique ${featureid}s ..."
+	grep "\s$featureid\s" $ann \
 		| bedtools sort -i stdin \
 		| bedtools merge -s -c 4,5,7,9 -o min,max,first,first -i stdin \
 		| awk -F'\t' -v f="$featureid" '{print $1, ".", f, $4, $5, ".", $6, ".", $7}' OFS="\t" \
@@ -328,8 +346,8 @@ if [ ! -d $outdir/hisat2_index ]; then
 	echo "$(timestamp) Generating HISAT2 index ..."
 	mkdir -p $outdir/hisat2_index
 	# extract splice sites for hisat2
-	hisat2_extract_splice_sites.py $gtf > $outdir/hisat2_index/hisat2_splicesites.txt
-	hisat2_extract_exons.py $gtf > $outdir/hisat2_index/hisat2_exons.txt
+	hisat2_extract_splice_sites.py $ann > $outdir/hisat2_index/hisat2_splicesites.txt
+	hisat2_extract_exons.py $ann > $outdir/hisat2_index/hisat2_exons.txt
 	hisat2-build -p $threads \
 		--ss $outdir/hisat2_index/hisat2_splicesites.txt \
 		--exon $outdir/hisat2_index/hisat2_exons.txt \
@@ -388,12 +406,12 @@ function infer_strandedness {
 	if [[ ! "$stranded" =~ [012] ]]; then
 		# infer strandedness
 		# + strand
-		gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="+"' $gtf | bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 100 -i -)
+		gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="+"' $ann | bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 100 -i -)
 		pR1=$(echo "$gtfsample" | samtools view -c -F 20 -f 64 -M -L - $bam)
 		pR2=$(echo "$gtfsample" | samtools view -c -F 20 -f 128 -M -L - $bam)
 
 		# - strand
-		gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="-"' $gtf | bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 100 -i -)
+		gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="-"' $ann | bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 100 -i -)
 		mR1=$(echo "$gtfsample" | samtools view -c -F 4 -f 80 -M -L - $bam)
 		mR2=$(echo "$gtfsample" | samtools view -c -F 4 -f 144 -M -L - $bam)
 
@@ -415,7 +433,7 @@ function quantify_background {
 	# quantify end2end alignments
 	if [ ! -f $bam.fc.txt ]; then
 		echo "$(timestamp) Quantifying background gene coverage ..."	
-		featureCounts -a $gtf -o $bam.fc.txt \
+		featureCounts -a $ann -o $bam.fc.txt \
 			-t $featureid -g $metafeatureid -s $stranded -p -C -O -M -T $threads \
 			$bam > $outdir/$lib/log_featureCounts.bg.txt 2>&1
 	fi
@@ -424,7 +442,7 @@ function quantify_background {
 	# due to the pseudo-stranding done during candidate read extraction, strandedness is 1 (or 0 for unstranded data)
 	if [ ! -f $outdir/$lib/untrimmed.bam.txt ]; then
 		echo "$(timestamp) Quantifying untrimmed reads ..."	
-		featureCounts -a $gtf -o $outdir/$lib/untrimmed.bam.txt \
+		featureCounts -a $ann -o $outdir/$lib/untrimmed.bam.txt \
 			-t $featureid -g $metafeatureid -s $(($stranded>0)) -p -C -O -M -T $threads \
 			$outdir/$lib/untrimmed.bam > $outdir/$lib/log_featureCounts.untrimmed.txt 2>&1
 	fi
@@ -513,7 +531,9 @@ function sl_realign {
 				hisat_options+="-1 $outdir/$lib/$SL.5p.fastq.gz -2 $outdir/$lib/$SL.mates.fastq.gz"
 			fi
 			hisat2 -x $outdir/hisat2_index/genome $hisat_options -p $threads 2> $outdir/$lib/log_$SL.hisat2.txt \
-				| samtools view -h -F 128 - \
+				| samtools view -@ $threads -h -f 64 - \
+				| samtools sort -@ $threads -n - \
+				| samtools fixmate -@ $threads - - \
 				| samtools sort -O bam -@ $threads -o $outdir/$lib/$SL$suff.bam - 2>> $outdir/$lib/log_$SL.hisat2.txt
 			samtools flagstat $outdir/$lib/$SL$suff.bam > $outdir/$lib/$SL$suff.bam.flagstat 
 			samtools index -@ $threads -b $outdir/$lib/$SL$suff.bam
@@ -586,7 +606,7 @@ ctdir=$outdir/2-counts
 mkdir -p $ctdir
 if [ ! -f $ctdir/SL.featureCounts.genes.raw.txt ]; then
 	echo "$(timestamp) Quantifying SL reads against genes ..."
-	featureCounts -a $gtf -o $ctdir/SL.featureCounts.genes.raw.txt \
+	featureCounts -a $ann -o $ctdir/SL.featureCounts.genes.raw.txt \
 		-t $featureid -g $metafeatureid -s 1 -O -M -T $threads \
 		$outdir/*/*.fc.bam > $ctdir/log_featureCounts.genes.txt 2>&1
 fi
@@ -599,7 +619,7 @@ fi
 # non-SL counts (background end-to-end alignments)
 #if [ ! -f $outdir/counts/bg.featureCounts.genes.raw.txt ]; then
 #	echo "$(timestamp) Quantifying background gene coverage ..."	
-#	featureCounts -a $gtf -o $outdir/counts/bg.featureCounts.genes.raw.txt \
+#	featureCounts -a $ann -o $outdir/counts/bg.featureCounts.genes.raw.txt \
 #		-t $featureid -g $metafeatureid -s $stranded -p -C -O -M -T $threads \
 #		$outdir/*/end2end_pre-align.bam > $outdir/counts/log_featureCounts.bg.genes.txt 2>&1
 #fi
@@ -647,12 +667,16 @@ fi
 # Arguments:	1) directory containing featureCounts output files
 #				2) number of threads
 #				3) minimum number of reads required for a peak
+
+# read length
+rlen=$(samtools cat $outdir/*/*.fc.bam | samtools stats | grep ^RL | tail -n 1 | cut -f 2)
+
 if [ ! -f $ctdir/SL.featureCounts.genes.clean.txt ] || \
    [ ! -f $ctdir/SL.featureCounts.exons.clean.txt ] || \
    [ ! -f $ctdir/bg.featureCounts.genes.clean.txt ] || \
    [ ! -f $ctdir/un.featureCounts.genes.clean.txt ]; then
 	echo "$(timestamp) Curating gene annotations ..."	
-	sloppr_curate_counts.R $ctdir $threads 4
+	sloppr_curate_counts.R $ctdir $threads $rlen 4
 fi
 
 #

@@ -14,7 +14,7 @@ Full descriptions of the implementation are detailed in the preprint published a
     - [RNA-Seq data input](#input)
     - [SLIDR (Spliced leader identification from RNA-Seq data)](#slidrparams)
         - [Reference assembly](#refassembly)
-        - [Read tail filtering](#tailfilter)
+        - [Read tail clustering](#tailcluster)
         - [SL RNA filtering](#rnafilter)
         - [Output files](#slidroutput)
     - [SLOPPR (Spliced leader-informed operon prediction from RNA-Seq data)](#slopprparams)
@@ -25,6 +25,7 @@ Full descriptions of the implementation are detailed in the preprint published a
 - [Guidelines for parameter choice](#guidelines)
     - [SLIDR](#slidrguidelines)
     - [SLOPPR](#slopprguidelines)
+- [Update log](#updates)
 - [Citation](#citation)
 
 <a name="installation"></a>
@@ -56,11 +57,12 @@ Full descriptions of the implementation are detailed in the preprint published a
 - [ViennaRNA](https://www.tbi.univie.ac.at/RNA/#download) (tested v2.4.14)
 - [R](https://www.r-project.org/) (tested v3.6.0)
 
-The R packages *data.table*, *glmpca*, *ggplot2*, *ggdendro*, *MASS* and *reshape2* are all available on CRAN and can be installed using `install.packages()` within the R console:
+The R packages *data.table*, *glmpca*, *ggplot2*, *scales*, *ggdendro*, *MASS* and *reshape2* are all available on CRAN and can be installed using `install.packages()` within the R console:
 
     install.packages("data.table")
     install.packages("glmpca")
     install.packages("ggplot2")
+	install.packages("scales")
     install.packages("ggdendro")
     install.packages("MASS")
 	install.packages("reshape2")
@@ -99,19 +101,19 @@ The script generates all input files and runs basic analyses, supplying the geno
 
     >Cel-SL2
 
-The on-screen SLIDR results consist of the expected SL1 and SL2 sequences, assembled from 165-6568 reads, encoded by 1-10 SL RNA genes and *trans*-spliced to 67-1216 genes:
+The on-screen SLIDR results detail the expected SL1 and SL2 sequences, the numbers of reads assembled, the numbers of SL RNA genes identified and the numbers of *trans*-spliced genes:
 
                     Sequence Reads SL_RNA_Genes SLTS_Genes
-      GGTTTAATTACCCAAGTTTGAG  6568           10       1216
-     GGTTTTAACCCAGTTTAACCAAG   165            1         67
+      GGTTTAATTACCCAAGTTTGAG  3039           10        884
+     gGTTTTAACCCAGTTTAACCAAG    78            1         48
 	 
-The on-screen SLOPPR results detail expectedly low SL-trans-splicing rates (5.14 %) and 84 predicted operons using SL2 as a polycistron resolver:
+The on-screen SLOPPR results detail expectedly low SL-trans-splicing rates (5.1 %) and 84 predicted operons using SL2 as a polycistron resolver:
 
     Numbers of genes receiving SLs:
-         not expressed  6386 32.26 %
-                 no SL 12392 62.61 %
-                   SL1   904  4.57 %
-                   SL2    96  0.49 %
+         not expressed  6230 31.43 %
+                 no SL 12583 63.47 %
+                   SL1   900  4.54 %
+                   SL2    96  0.48 %
                SL1+SL2    15  0.08 %
 
     Predicted operonic genes, operons and operon sizes (n = genes in operon):
@@ -210,8 +212,8 @@ Path to genome annotations in GFF or GTF format.
 `-t <file>`
 Path to transcriptome assembly in FASTA format.
 
-<a name="tailfilter"></a>
-#### Read tail filtering
+<a name="tailcluster"></a>
+#### Read tail clustering
 
 `-l <num>`
 Minimum length of soft-clipped tails to retain after alignment (default: 8). If very few reads pass filters it may be useful to decrease this value.
@@ -236,11 +238,14 @@ Modifying the scale factor `-x` can restrict or expand the upper tail length lim
     125bp	8	20	33	45	58	70	83	95
     150bp	10	25	40	55	70	85	100	115
 
-`-e <num>`
-BLASTN E-value (default: 1). This parameter controls the stringency of the alignment of the read tail cluster centroids against the reference assembly. The default value of 1 is appropriate for centroid lengths as low as 10 bp and should rarely require modifying. Decreasing the value will substantially reduce the numbers of reads passing filteres. Increasing the value will allow shorter centroids to be retained, which we found necessary when analysing the short 16bp SL in *Ciona intestinalis*. Note that increasing this value will substantially increase the numbers of sequence alignments to process.
+`--agc`
+Cluster read tails using abundance-based greedy clustering (AGC) instead of the default distance-based greedy clustering (DGC) ([what's that?](https://link.springer.com/article/10.1186/s40168-015-0081-x)). Use this option if DGC yields poor coverage in the final SLs. See also the [parameter guidelines](#agc) for more information.
 
 <a name="rnafilter"></a>
 #### SL RNA filtering
+
+`-e <num>`
+BLASTN E-value (default: 1). This parameter controls the stringency of the alignment of the read tail cluster centroids against the reference assembly. The default value of 1 is appropriate for centroid lengths as low as 10 bp and should rarely require modifying. Decreasing the value will substantially reduce the numbers of reads passing filteres. Increasing the value will allow shorter centroids to be retained, which we found necessary when analysing the short 16bp SL in *Ciona intestinalis*. Note that increasing this value will substantially increase the numbers of sequence alignments to process.
 
 `-D <chr>`
 Splice donor site pattern in regex notation (default: GT). Alternative nucleotides can be coded with character classes, for example, `-D 'G[TC]'` matches GT or GC, and `-D 'A[AG][TC]'` matches AAT, AAC, AGT or AGC. To switch off, specify empty character string (`-D ''`).
@@ -411,6 +416,59 @@ Consider relaxing or disabling nucleotide motif filters to test whether this yie
 
     slidr.sh -D 'G[TC]' -S '' -A 'A[GC]'
 
+<a name="agc"></a>	
+#### Should I use DGC or AGC clustering?
+	
+That depends on your dataset and is impossible to know in advance. To illustrate the difference between the two methods, consider the following tails after dereplication:
+
+                             Tail Abundance
+    1: TTAGCTTAGCAGTAGGGGAGTTTGAG         1
+	2:     GGTTTAATTACCCAAGTTTGAG        10
+	3:          AATTACCCAAGTTTGAG       100
+	4:              ACCCAAGTTTGAG      1000
+	5:                   AGTTTGAG     10000
+     
+Note that tail 2 is the full-length *C. elegans* SL1 sequence and tails 2-5 are 5' truncated versions that clearly should be clustered with tail 2. However, the short and highly abundant tail 5 also happens to be identical to the 3' end of tail 1, which only appears once and is likely to be noise.
+
+Using DGC, ties are broken by sequence length, so tail 5 will cluster with tail 1 instead of tail 2, yielding the following two clusters:
+
+                 Cluster centroid Abundance
+    1: TTAGCTTAGCAGTAGGGGAGTTTGAG     10001
+	2:     GGTTTAATTACCCAAGTTTGAG      1110
+	
+Using AGC, ties are broken by abundance, so tail 5 will cluster correctly with tail 2 because it is more abundant:
+
+                 Cluster centroid Abundance
+    1: TTAGCTTAGCAGTAGGGGAGTTTGAG         1
+	2:     GGTTTAATTACCCAAGTTTGAG     11110
+
+That's a dramatic difference in read coverage! So is AGC always superior to DGC? No! Let's add another unspecific tail X that happens to be highly abundant:
+
+                             Tail Abundance
+    1: TTAGCTTAGCAGTAGGGGAGTTTGAG         1
+	2:     GGTTTAATTACCCAAGTTTGAG        10
+	3:          AATTACCCAAGTTTGAG       100
+	4:              ACCCAAGTTTGAG      1000
+	X:                  TAGTTTGAG      5000
+	5:                   AGTTTGAG     10000
+
+Using AGC, tail 5 will now cluster with tail X instead of tail 2 because its abundance is higher (5000 vs. 1110):
+
+                 Cluster centroid Abundance
+    1: TTAGCTTAGCAGTAGGGGAGTTTGAG         1
+	2:     GGTTTAATTACCCAAGTTTGAG      1110
+	3:                  TAGTTTGAG     15000
+	
+Conversely, using DGC, tail 5 clusters correctly with tail 2 because it is longer:
+
+                 Cluster centroid Abundance
+    1: TTAGCTTAGCAGTAGGGGAGTTTGAG         1
+	2:     GGTTTAATTACCCAAGTTTGAG     11110
+	3:                  TAGTTTGAG      5000
+
+It is obvious that the two clustering methods are bound to yield very different results in organisms with many SL variants that happen to be conserved at the 3' end. In those cases, short tails will match multiple SLs and ties must be broken arbitrarily (length or abundance).
+Most datasets we have analysed yield better results with the default DGC, but some worked very poorly and improved dramatically with AGC. We therefore suggest to use the default DGC and try AGC if SL read coverage is suspiciously low.
+
 #### I want to analyse hundreds of RNA-Seq libraries - can SLIDR handle it?
 
 Yes, but be aware of bottlenecks:
@@ -418,7 +476,7 @@ Yes, but be aware of bottlenecks:
 - Tail alignment with BLASTN may be time consuming despite multithreading.
 - Final SL consensus calling in R may require large amounts of RAM if many millions of reads pass filters.
 
-Future updates may support more efficient data structures and automatic HPC job control.
+Future updates may support more efficient data structures and automatic HPC job control. SLIDR typically does not need huge amounts of data, so consider starting with a small number of libraries.
 
 <a name="slopprguidelines"></a>
 ### SLOPPR
@@ -500,6 +558,22 @@ Yes, but be aware of bottlenecks:
 - SL clustering in R may be time consuming for hundreds of samples
 
 Future updates may support more efficient data structures and automatic HPC job control.
+
+<a name="updates"></a>
+# Update log
+
+## 19/02/2021
+- SLIDR 1.1.3: added option to choose distance-based or abundance-based greedy clustering (DGC, AGC); fixed out-of-memory errors with large datasets; added gzip support for genome/transcriptome and annotations
+- SLOPPR 1.1.2: improved gene-curation algorithm; now splits consecutive exons if reads are shorter than exon length; added gzip support for genome and annotations; fixed compatibility issue with SUBREAD 2.0.1
+
+## 01/02/2021
+
+- SLOPPR 1.1.1: added -T and -f options; fixed bug when GFF/GTF contains no exons
+- SLIDR 1.1.2: added -T option
+
+## 26/01/2021
+
+- SLIDR 1.1.1: fixed poor read recovery when using outdated VSEARCH (recommend version 2.15.1); fixed clustering problems when read tails contained Ns.
 
 <a name="citation"></a>
 # Citation

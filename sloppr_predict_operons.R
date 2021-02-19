@@ -1,8 +1,8 @@
 #!/usr/bin/env Rscript
 
 # this script is designed to predict operons from a featureCount matrix
-# full functionality is implemented, including graphical output
 
+options(scipen=999)
 library("parallel")
 library("ggdendro")
 library("MASS")
@@ -26,7 +26,7 @@ library("glmpca")
 #				11) output directory
 
 args = commandArgs(trailingOnly=TRUE)
-#args <- c("2-counts/SL.featureCounts.genes.clean.txt", 
+#args <- c("SL.featureCounts.genes.clean.txt", 
 #			"sl.fa", 
 #			"", 
 #		"infinity", 
@@ -35,7 +35,7 @@ args = commandArgs(trailingOnly=TRUE)
 #			"COP", 
 #			"geometric mean",
 #			"remove",
-#			"1", "test")
+#			"1", ".")
 #print(cbind(args))
 f <- args[1]
 s <- args[2]
@@ -93,7 +93,7 @@ cat("\n")
 
 # featureCounts results
 readFC <- function(f){
-  d <- read.table(f, sep="\t", header=T, stringsAsFactors=F)
+  d <- read.table(f, sep="\t", header=T, stringsAsFactors=F, comment.char="")
   # simplify
   #d <- d[,grep("alternative", colnames(d), invert=T)]
   
@@ -548,7 +548,7 @@ inferOperons <- function(cts, cutoff=Inf){
 		chrs$Status[m] <- "monocistronic"
 
 		# define operon annotations from runs of downstream genes
-		# upstream genes can then be added on, or be part of the run of SL2-bias required
+		# upstream genes can then be added on, or be part of the run if SL2-bias required
 		rl <- rle(chrs$Status)
 		for(rn in which(rl$values=="downstream")){
 		  dstr.end <- sum(rl$lengths[0:rn])
@@ -741,7 +741,7 @@ write.gff3 <- function(pref){
 	gff3 <- do.call(c, gff3)
 	
 	gff3 <- c("##gff-version 3", 
-					"# predicted using SLOPPR 1.1",
+					"# predicted using SLOPPR 1.1.2",
 					paste("# Libraries:", paste(unique(fc$Meta$Library), collapse=", ")), 
 					paste("# SL1-type SLs:", paste(unique(subset(fc$Meta, SL.type==pref.inv | SL.cluster==pref.inv)$SL), collapse=", ")),
 					paste("# SL2-type SLs:", paste(unique(subset(fc$Meta, SL.type==pref | SL.cluster==pref)$SL), collapse=", ")),

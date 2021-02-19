@@ -7,8 +7,8 @@ mkdir -p toy_data
 #
 wget -P toy_data https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/002/985/GCF_000002985.6_WBcel235/GCF_000002985.6_WBcel235_genomic.fna.gz
 wget -P toy_data https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/002/985/GCF_000002985.6_WBcel235/GCF_000002985.6_WBcel235_genomic.gff.gz
-gunzip toy_data/GCF_000002985.6_WBcel235_genomic.fna.gz
-gunzip toy_data/GCF_000002985.6_WBcel235_genomic.gff.gz
+#gunzip toy_data/GCF_000002985.6_WBcel235_genomic.fna.gz
+#gunzip toy_data/GCF_000002985.6_WBcel235_genomic.gff.gz
 
 # download RNA-Seq data from ENA
 #
@@ -28,8 +28,8 @@ echo -e "ERR2756729\tx\ttoy_data/ERR2756729_1.fastq.gz\ttoy_data/ERR2756729_2.fa
 
 # SLIDR run
 #
-time slidr.sh -g toy_data/GCF_000002985.6_WBcel235_genomic.fna -a toy_data/GCF_000002985.6_WBcel235_genomic.gff -m libraries_config.txt -o slidr_toy_data
+time slidr.sh -g toy_data/GCF_000002985.6_WBcel235_genomic.fna.gz -a toy_data/GCF_000002985.6_WBcel235_genomic.gff.gz -m libraries_config.txt -o slidr_toy_data --agc
 
 # SLOPPR run
 #
-time sloppr.sh -g toy_data/GCF_000002985.6_WBcel235_genomic.fna -a toy_data/GCF_000002985.6_WBcel235_genomic.gff -s SL.fasta -S SL2.txt -o sloppr_toy_data -m libraries_config.txt
+time sloppr.sh -g toy_data/GCF_000002985.6_WBcel235_genomic.fna.gz -a toy_data/GCF_000002985.6_WBcel235_genomic.gff.gz -s SL.fasta -S SL2.txt -o sloppr_toy_data -m libraries_config.txt
