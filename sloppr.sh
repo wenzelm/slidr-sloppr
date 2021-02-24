@@ -324,7 +324,7 @@ if [ ! -f $gtf ]; then
 	elif [[ "$fform" =~ "gzip" ]] && [[ ! "$fform" =~ ".gtf" ]]; then
 		gunzip -c $ann | gffread $gropts -o $gtf
 	elif [[ ! "$fform" =~ "gzip" ]] && [[ "$fform" =~ ".gtf" ]]; then
-		cp $ann > $gtf
+		cp $ann $gtf
 	else
 		gffread $ann $gropts -o $gtf
 	fi

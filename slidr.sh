@@ -319,7 +319,7 @@ if [ ! -f $outdir/reference.fa ]; then
 	if [ "$(file $ref | grep -i gzip)" ]; then
 		gunzip -c $ref > $outdir/reference.fa
 	else
-		cp $ref > $outdir/reference.fa
+		cp $ref $outdir/reference.fa
 	fi
 fi
 ref=$outdir/reference.fa
@@ -338,7 +338,7 @@ if [ ! "$ann" == "" ]; then
 		elif [[ "$fform" =~ "gzip" ]] && [[ ! "$fform" =~ ".gtf" ]]; then
 			gunzip -c $ann | gffread $gropts -o $gtf
 		elif [[ ! "$fform" =~ "gzip" ]] && [[ "$fform" =~ ".gtf" ]]; then
-			cp $ann > $gtf
+			cp $ann $gtf
 		else
 			gffread $ann $gropts -o $gtf
 		fi
