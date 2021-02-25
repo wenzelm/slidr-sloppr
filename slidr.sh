@@ -600,7 +600,7 @@ tailprefix=$outdir/1-tails/tails-x$tscale-l$tlength
 if [ ! -f $tailprefix.derep.fa.gz ]; then
 	echo "$(timestamp) Dereplicating tails ..."
 	gunzip -c $outdir/1-tails/tails-x$tscale.fa.gz \
-	| awk '!/^>/$0~"N"{$0=""}{print}' \
+	| awk '!/^>/ && $0~"N"{$0=""}{print}' \
 	| vsearch --derep_fulllength - \
 		--output $tailprefix.derep.fa \
 		--uc $tailprefix.derep.out.txt \
