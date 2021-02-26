@@ -1,5 +1,7 @@
 #!/usr/bin/env Rscript
 
+sloppr_version <- "1.1.2"
+
 # this script is designed to predict operons from a featureCount matrix
 
 options(scipen=999)
@@ -26,9 +28,9 @@ library("glmpca")
 #				11) output directory
 
 args = commandArgs(trailingOnly=TRUE)
-#args <- c("SL.featureCounts.genes.clean.txt", 
-#			"sl.fa", 
-#			"", 
+#args <- c("sloppr_toy_data/2-counts/SL.featureCounts.genes.clean.txt", 
+#			"SL.fasta", 
+#			"SL2.txt", 
 #		"infinity", 
 #			"no",
 #			"infinity",
@@ -156,7 +158,7 @@ readFC <- function(f){
 	sl.counts <- as.matrix(d[subset(meta, Library==lib)$ID])
 	bg.counts[,lib] <- bg.counts[,lib] + rowSums(sl.counts)
 	# CPM
-	total <- sum(bg.counts[,lib]) + sum(sl.counts)
+	total <- sum(bg.counts[,lib]) #+ sum(sl.counts)
 	d.cpm[subset(meta, Library==lib)$ID] <- sl.counts*1e6/total
 	# TPM
 	bg.counts[,lib] <- bg.counts[,lib]/bg$Length
@@ -367,7 +369,7 @@ cts.ty <- resolve_reps("SL.type", c("SL1", "SL2"))
 cts.cl <- resolve_reps("SL.cluster", c("Cluster1", "Cluster2"))
 
 # add read ratios (all possible ways)
-cts.res <- data.frame(fc$CPM[,c(1:7)], cts.ty, SL2v1=cts.ty[,"SL2"]/cts.ty[,"SL1"],
+cts.res <- data.frame(fc$CPM[,c(1:7)], meanTPM=rowMeans(fc$bg[-1]), cts.ty, SL2v1=cts.ty[,"SL2"]/cts.ty[,"SL1"],
 			cts.cl, Cluster1v2=cts.cl[,"Cluster1"]/cts.cl[,"Cluster2"], 
 			Cluster2v1=cts.cl[,"Cluster2"]/cts.cl[,"Cluster1"])
 		
@@ -399,55 +401,6 @@ pdf(file.path(wdir, paste0(outpref, ".SL_readratio.pdf")), width=8, height=8)
 	gg.rr
 invisible(dev.off())
 
-		
-
-# old resolve function
-resolve_reps_old <- function(dd){
-  sls <- unique(dd$Meta$SL)
-  # resolved counts
-  cts.res <- lapply(sls, function(s) {
-    cts <- as.data.frame(dd$Counts[,which(dd$Meta$SL == s)+7])
-	cts <- apply(cts, 1, function(x){
-		# remove zeros?
-		if(zero!="keep") x <- x[x>0]
-		if(agg=="sum") {			# sum counts
-			x <- sum(x)
-		} else if(agg=="median"){	# median counts
-			x <- median(x)
-		} else {					# default to geometric mean
-			x <- exp(mean(log(x)))
-		}
-		x[is.nan(x)] <- 0
-		x
-	})
-  })
-  cts.res <- do.call(cbind.data.frame, cts.res)
-  colnames(cts.res) <- sls
-  
-  # sum resolved counts per SL cluster
-  cts.cl <- lapply(c("Cluster1", "Cluster2"), function(clu){
-    sls <- unique(subset(dd$Meta, SL.cluster==clu)$SL)
-    rowSums(as.data.frame(cts.res[,sls]))
-  })
-  cts.cl <- do.call(cbind.data.frame, cts.cl)
-  colnames(cts.cl) <- c("Cluster1", "Cluster2")
-  
-  # sum resolved counts per SL type
-  cts.ty <- lapply(c("SL1", "SL2"), function(ty){
-    sls <- unique(subset(dd$Meta, SL.type==ty)$SL)
-    rowSums(as.data.frame(cts.res[,sls]))
-  })
-  cts.ty <- do.call(cbind.data.frame, cts.ty)
-  colnames(cts.ty) <- c("SL1", "SL2")
-  
-  # add read ratios (all possible ways)
-  data.frame(dd$Counts[,c(1:7)], cts.ty, SL2v1=cts.ty$SL2/cts.ty$SL1,
-			cts.cl, Cluster1v2=cts.cl$Cluster1/cts.cl$Cluster2, 
-			Cluster2v1=cts.cl$Cluster2/cts.cl$Cluster1)
-}
-#cts <- lapply(fc, resolve_reps)
-#cts.res <- resolve_reps(fc)
-
 # need to infer classes and operons for all three read-ratios
 # and work out which one is best
 # if SL2-types are known, ignore the clusters
@@ -464,12 +417,12 @@ inferClasses <- function(r){
 	cl[cts.res[,rr]==0] <- "SL1"
 	cl[is.infinite(cts.res[,rr])] <- "SL2"
 	cl[is.na(cts.res[,rr])] <- "no SL"
-	data.frame(cts.res[,c(1:7)], cts.res[,c(r.compl,r)], Ratio=cts.res[,rr], Class=cl, stringsAsFactors = F)
+	data.frame(cts.res[,c(1:8)], cts.res[,c(r.compl,r)], Ratio=cts.res[,rr], Class=cl, stringsAsFactors = F)
 }
 cts.op <- lapply(c("SL2", "Cluster1", "Cluster2"), inferClasses)
 
-# SL CPM vs background TPM
-da <- data.frame(TPM=rowSums(fc$bg[-1])[match(cts.op[[1]]$Geneid, fc$bg$Geneid)], 
+# SL CPM vs background mean TPM
+da <- data.frame(TPM=rowMeans(fc$bg[-1])[match(cts.op[[1]]$Geneid, fc$bg$Geneid)], 
 				SL=cts.op[[1]]$Class,
 				CPM=rowSums(cts.res[,c("SL1", "SL2")]))
 
@@ -478,7 +431,7 @@ gg.tpm1 <- ggplot(da, aes(x=SL, y=TPM, fill=SL)) +
 	geom_boxplot(color="white", width=0.2, outlier.shape=NA) + 
 	scale_y_log10(labels=comma) + 
 	scale_fill_manual(values=colours.cl) +
-	ylab("TPM (background)") +
+	ylab("Background (TPM)") +
 	theme_classic() +
 	theme(legend.position="none")
 
@@ -489,7 +442,7 @@ gg.tpm2 <- ggplot(subset(da, SL!="no SL"), aes(y=TPM, x=CPM, fill=SL)) +
 	scale_fill_manual(values=colours.cl) +
 	scale_x_continuous(labels=comma) +
 	scale_y_continuous(labels=comma) +
-	xlab("CPM (SL)") + ylab("TPM (background)") +
+	xlab("SL (CPM)") + ylab("Background (TPM)") +
 	theme_classic() +
 	theme(legend.position="none")
 gg.tpm <- arrangeGrob(gg.tpm1, gg.tpm2, widths=c(0.3, 0.7), ncol=2)
@@ -580,7 +533,14 @@ inferOperons <- function(cts, cutoff=Inf){
 	}, mc.cores=threads)
 	cts <- do.call(rbind, cts)
 	cts <- subset(cts, Status != "dummy")
-	cts$Status <- factor(cts$Status, levels=c("upstream", "downstream", "monocistronic", "not trans-spliced"))	
+	cts$Status <- factor(cts$Status, levels=c("upstream", "downstream", "monocistronic", "not trans-spliced"))
+	
+	# replace operon ID with proper ID
+	cts <- cts[order(cts$Chr, cts$Start),]
+	op.id <- cts$Operon[!is.na(cts$Operon)]
+	op.id <- factor(op.id, levels=unique(op.id))
+	op.id <- paste0(op.prefix, as.numeric(op.id))
+	cts$Operon[!is.na(cts$Operon)] <- op.id
 	return(cts)
 }
 #cts.op <- lapply(cts.op, inferOperons)
@@ -617,10 +577,6 @@ names(cts.op) <- c("SL2", "Cluster1", "Cluster2")
 	# we also cannot have operons comprising only one gene (distance would be senseless)
 	#z <- which(y>50)
 	#which(c(Inf, y)[z]>50)
-	
-
-
-
 
 # summarise intergenic distances
 sink(file.path(wdir, paste0(outpref, ".intergenic_distances.txt")))
@@ -656,7 +612,7 @@ pdf(file.path(wdir, paste0(outpref, ".intergenic_distances.pdf")), width=8, heig
 	  scale_x_discrete(position="top") +
 	  #scale_x_discrete(labels=c("Cluster1", "Cluster2", "SL2")) +
 	  guides(fill=guide_legend(ncol=1)) +
-	  xlab("Polycistron resolvers") + ylab("Intergenic distance") +
+	  xlab("Polycistron resolvers") + ylab("Intergenic distance (bp)") +
 	  coord_flip () +
 	  theme_bw() +
 	  theme(legend.position="right")
@@ -713,7 +669,7 @@ write.gff3 <- function(pref){
 	}
 	operons <- operons[order(sapply(operons, function(x) x$Chr[1]), sapply(operons, function(x) min(x$Start)))]
 	gff3 <- lapply(1:length(operons), function(i){
-		opid <- paste0(op.prefix, i)     # operon name
+		opid <- unique(operons[[i]]$Operon) #opid <- paste0(op.prefix, i)     # operon name
 		strand <- unique(operons[[i]]$Strand)[1]
 		opg <- nrow(operons[[i]])
 		gff.1 <- paste(operons[[i]]$Chr[1], ".", "operon", 
@@ -729,11 +685,12 @@ write.gff3 <- function(pref){
 				paste0("ID=", gid, 
 					  ";Name=", opgene[,"Geneid"], 
 					  ";Parent=", opid, 
-					  ";Note=", "SL1:", opgene[,grep(pref.inv, colnames(dd))],
-					  ",SL2:", opgene[,grep(pref, colnames(dd))],
-					  ",SL2:SL1-ratio:", opgene[,"Ratio"], 
-					  ",intercistronic distance:", opgene[,"Distance"],
-					  ",", opgene[,"Status"], " in operon")
+					  ";Note=", "meanTPM:", round(opgene[,"meanTPM"], 2),
+					  ", SL1:", round(opgene[,grep(pref.inv, colnames(dd))], 2),
+					  ", SL2:", round(opgene[,grep(pref, colnames(dd))], 2),
+					  ", SL2:SL1-ratio:", opgene[,"Ratio"], 
+					  ", intercistronic distance:", opgene[,"Distance"],
+					  ", ", opgene[,"Status"], " in operon")
 				, sep="\t")
 		})
 		c(gff.1, gff.2)
@@ -741,7 +698,7 @@ write.gff3 <- function(pref){
 	gff3 <- do.call(c, gff3)
 	
 	gff3 <- c("##gff-version 3", 
-					"# predicted using SLOPPR 1.1.2",
+					paste("# predicted using SLOPPR", sloppr_version),
 					paste("# Libraries:", paste(unique(fc$Meta$Library), collapse=", ")), 
 					paste("# SL1-type SLs:", paste(unique(subset(fc$Meta, SL.type==pref.inv | SL.cluster==pref.inv)$SL), collapse=", ")),
 					paste("# SL2-type SLs:", paste(unique(subset(fc$Meta, SL.type==pref | SL.cluster==pref)$SL), collapse=", ")),
