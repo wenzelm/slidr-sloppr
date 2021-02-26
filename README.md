@@ -270,7 +270,7 @@ Maximum base-pair span within stem-loop (default: 35). This parameter controls s
 
 Final results are written to the directory `3-results-[suffix]` inside the specified output directory. The suffix of the directory name summarises the specified parameters to allow for convenient parameter sweeps within the same output directory, for example `slidr_toy_data/3-results-x1.0-l8-e1-R80-DGT-S.{20,60}AT{4,6}G-L35-AAG-O10`
 
-- `SL.tsv`: tab-delimited table summarising SL sequence, read coverage, numbers of SL RNA genes, numbers of SL *trans*-spliced genes, numbers of stem loops and structure stability statistics from [RNAFold](https://www.tbi.univie.ac.at/RNA/RNAfold.1.html) (MFE frequency and ensemble diversity)
+- `SL.tsv`: tab-delimited table summarising SL sequence, read coverage, numbers of SL RNA genes, numbers of SL *trans*-spliced genes (acceptor sites), numbers of stem loops and structure stability statistics from [RNAFold](https://www.tbi.univie.ac.at/RNA/RNAfold.1.html) (MFE frequency and ensemble diversity)
 - `raw.tsv`: same as `SL.tsv`, but including singleton SLs (defined by only a single read and/or spliced to only a single gene). 
 - `SL.fa`: all SL sequences in FASTA format
 - `SL_RNA_genes.fa`: all SL RNA gene sequences in FASTA format
@@ -363,7 +363,7 @@ Operon prediction results are written to the subdirectory `3-operons-[suffix]`. 
 - `*.SL_readratio.txt`: quartiles of SL2:SL1, Cluster1:Cluster2 and Cluster2:Cluster1 read ratios across genes that receive both SL types.
 - `*.operons.summary.txt`: numbers of operons, operonic genes and distribution of operon sizes, using either SL2, Cluster1, or Cluster2 as polycistron resolvers
 - `*.operons.intergenic_distances.txt`: quartiles of intercistronic (=operonic) and intergenic (=non-operonic) distances, using either SL2, Cluster1, or Cluster2 as polycistron resolvers
-- `*.operons.[SL2|Cluster1|Cluster2].txt`: gene names, locations, distances, SL1/SL2 read counts (CPM), SL2:SL1 read ratios and inferred operonic status among all genes, using either SL2, Cluster1, or Cluster2 as polycistron resolvers
+- `*.operons.[SL2|Cluster1|Cluster2].txt`: gene names, locations, distances, background gene expression (TPM) SL1/SL2 read counts (CPM), SL2:SL1 read ratios and inferred operonic status among all genes, using either SL2, Cluster1, or Cluster2 as polycistron resolvers
 - `*.operons.[SL2|Cluster1|Cluster2].gff3`: predicted operons and operonic genes in GFF3 format, using either SL2, Cluster1, or Cluster2 as polycistron resolvers
 
 Most of these files are also available in graphical format as PDF. Log files and intermediate output files are written to the directories `1-library_[library name]` and `2-counts`.
@@ -428,7 +428,7 @@ That depends on your dataset and is impossible to know in advance. To illustrate
 	4:              ACCCAAGTTTGAG      1000
 	5:                   AGTTTGAG     10000
      
-Note that tail 2 is the full-length *C. elegans* SL1 sequence and tails 2-5 are 5' truncated versions that clearly should be clustered with tail 2. However, the short and highly abundant tail 5 also happens to be identical to the 3' end of tail 1, which only appears once and is likely to be noise.
+Note that tail 2 is the full-length *C. elegans* SL1 sequence and tails 3-5 are 5' truncated versions that clearly should be clustered with tail 2. However, the short and highly abundant tail 5 also happens to be identical to the 3' end of tail 1, which only appears once and is likely to be noise.
 
 Using DGC, ties are broken by sequence length, so tail 5 will cluster with tail 1 instead of tail 2, yielding the following two clusters:
 
@@ -442,10 +442,9 @@ Using AGC, ties are broken by abundance, so tail 5 will cluster correctly with t
     1: TTAGCTTAGCAGTAGGGGAGTTTGAG         1
 	2:     GGTTTAATTACCCAAGTTTGAG     11110
 
-That's a dramatic difference in read coverage! So is AGC always superior to DGC? No! Let's add another unspecific tail X that happens to be highly abundant:
+That's a dramatic difference in read coverage! So is AGC always superior to DGC? No! Let's remove tail 1 and add another unspecific tail X that happens to be highly abundant:
 
                              Tail Abundance
-    1: TTAGCTTAGCAGTAGGGGAGTTTGAG         1
 	2:     GGTTTAATTACCCAAGTTTGAG        10
 	3:          AATTACCCAAGTTTGAG       100
 	4:              ACCCAAGTTTGAG      1000
@@ -455,19 +454,17 @@ That's a dramatic difference in read coverage! So is AGC always superior to DGC?
 Using AGC, tail 5 will now cluster with tail X instead of tail 2 because its abundance is higher (5000 vs. 1110):
 
                  Cluster centroid Abundance
-    1: TTAGCTTAGCAGTAGGGGAGTTTGAG         1
 	2:     GGTTTAATTACCCAAGTTTGAG      1110
-	3:                  TAGTTTGAG     15000
+	X:                  TAGTTTGAG     15000
 	
 Conversely, using DGC, tail 5 clusters correctly with tail 2 because it is longer:
 
                  Cluster centroid Abundance
-    1: TTAGCTTAGCAGTAGGGGAGTTTGAG         1
 	2:     GGTTTAATTACCCAAGTTTGAG     11110
-	3:                  TAGTTTGAG      5000
+	X:                  TAGTTTGAG      5000
 
 It is obvious that the two clustering methods are bound to yield very different results in organisms with many SL variants that happen to be conserved at the 3' end. In those cases, short tails will match multiple SLs and ties must be broken arbitrarily (length or abundance).
-Most datasets we have analysed yield better results with the default DGC, but some worked very poorly and improved dramatically with AGC. We therefore suggest to use the default DGC and try AGC if SL read coverage is suspiciously low.
+Most datasets we have analysed yield better results with the default DGC, but others performed poorly and improved dramatically with AGC. We therefore suggest to use the default DGC and try AGC if SL read coverage is suspiciously low.
 
 #### I want to analyse hundreds of RNA-Seq libraries - can SLIDR handle it?
 
@@ -481,7 +478,7 @@ Future updates may support more efficient data structures and automatic HPC job 
 <a name="slopprguidelines"></a>
 ### SLOPPR
 
-SLOPPR finds operons by designating downstream operonic genes via SL2-type bias; upstream genes are added to each tract of downstream operonic genes. Therefore, you must identify what SLs your organism uses to resolve downstream operonic genes. This may be a specialised set of SLs that are not usually added to any other genes, or it may be the same SLs that are also added to upstream operonic or monocistronic genes. SLOPPR can model virtually any scenario, but requires careful specification of several parameters (`-S`, `-u`, `-d`, `-i`)
+SLOPPR finds operons by designating downstream operonic genes via SL2-type bias; upstream genes are then added to each tract of downstream operonic genes. Therefore, you must identify what SLs your organism uses to resolve downstream operonic genes. This may be a specialised set of SLs that are not usually added to any other genes, or it may be the same SLs that are also added to upstream operonic or monocistronic genes. SLOPPR can model virtually any scenario, but requires careful specification of several parameters (`-S`, `-u`, `-d`, `-i`)
 
 #### Multiple SLs; some are specialised for resolving downstream operonic genes
 
@@ -564,7 +561,7 @@ Future updates may support more efficient data structures and automatic HPC job 
 
 ## 19/02/2021
 - SLIDR 1.1.3: added option to choose distance-based or abundance-based greedy clustering (DGC, AGC); fixed out-of-memory errors with large datasets; added gzip support for genome/transcriptome and annotations
-- SLOPPR 1.1.2: improved gene-curation algorithm; now splits consecutive exons if reads are shorter than exon length; added gzip support for genome and annotations; fixed compatibility issue with SUBREAD 2.0.1
+- SLOPPR 1.1.2: improved gene-curation algorithm; now splits consecutive exons if reads are shorter than exon length; added gzip support for genome and annotations; fixed compatibility issue with SUBREAD 2.0.1; added TPM to output GFF
 
 ## 01/02/2021
 
