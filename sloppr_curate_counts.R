@@ -109,11 +109,11 @@ for(fc in c("bg.featureCounts.genes.raw.txt", "un.featureCounts.genes.raw.txt", 
 # exon-based counts need tidying and peak correction
 ebc <- loadFC(file.path(wdir, "SL.featureCounts.exons.raw.txt"))
 ng <- length(unique(ebc$Geneid))
-cat(paste("Processed", nrow(ebc), "exon records comprising", ng, "gene IDs ...\n"))
+cat(paste("Processed", nrow(ebc), "exon records comprising", ng, "gene IDs\n"))
 
 ebc <- peak_split(ebc)
 ngn <- length(unique(ebc$Geneid))
-cat(paste0("Gained ", ngn-ng, " gene IDs (", ngn , " total) by splitting at internal exons with SL reads ...\n"))
+cat(paste0("Gained ", ngn-ng, " gene IDs (", ngn , " total) by splitting at internal exons with SL reads\n"))
 
 write.table(ebc, file.path(wdir, "SL.featureCounts.exons.clean.txt"), row.names=F, col.names=T, quote=F, sep="\t")
 

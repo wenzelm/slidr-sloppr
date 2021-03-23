@@ -5,17 +5,15 @@ mkdir -p toy_data
 
 # download C. elegans genome and annotations from NCBI
 #
-wget -P toy_data https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/002/985/GCF_000002985.6_WBcel235/GCF_000002985.6_WBcel235_genomic.fna.gz
-wget -P toy_data https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/002/985/GCF_000002985.6_WBcel235/GCF_000002985.6_WBcel235_genomic.gff.gz
-#gunzip toy_data/GCF_000002985.6_WBcel235_genomic.fna.gz
-#gunzip toy_data/GCF_000002985.6_WBcel235_genomic.gff.gz
+wget -c -P toy_data https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/002/985/GCF_000002985.6_WBcel235/GCF_000002985.6_WBcel235_genomic.fna.gz
+wget -c -P toy_data https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/002/985/GCF_000002985.6_WBcel235/GCF_000002985.6_WBcel235_genomic.gff.gz
 
 # download RNA-Seq data from ENA
 #
-wget -P toy_data ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR275/009/ERR2756729/ERR2756729_1.fastq.gz
-wget -P toy_data ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR275/009/ERR2756729/ERR2756729_2.fastq.gz
-wget -P toy_data ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR275/000/ERR2756730/ERR2756730_1.fastq.gz
-wget -P toy_data ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR275/000/ERR2756730/ERR2756730_2.fastq.gz
+wget -c -P toy_data ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR275/009/ERR2756729/ERR2756729_1.fastq.gz
+wget -c -P toy_data ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR275/009/ERR2756729/ERR2756729_2.fastq.gz
+wget -c -P toy_data ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR275/000/ERR2756730/ERR2756730_1.fastq.gz
+wget -c -P toy_data ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR275/000/ERR2756730/ERR2756730_2.fastq.gz
 
 # generate SL FASTA file
 #

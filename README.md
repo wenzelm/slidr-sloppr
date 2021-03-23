@@ -24,7 +24,22 @@ Full descriptions of the implementation are detailed in the preprint published a
         - [Output files](#slopproutput)
 - [Guidelines for parameter choice](#guidelines)
     - [SLIDR](#slidrguidelines)
+        - [I have got an unannotated draft genome for my organism - is this good enough?](#slidrguide1)
+        - [I have got neither a genome nor a transcriptome for my organism - can I run SLIDR?](#slidrguide2)
+        - [SLs and SL RNAs are entirely uncharacterised in my organism - how do I get started with SLIDR?](#slidrguide3)
+        - [SLs and SL RNAs are already characterised in my organism - do I need to run SLIDR?](#slidrguide4)
+        - [My organism has very diverse SLs with vastly different SL RNA characteristics - how to run SLIDR?](#slidrguide5)
+        - [SLIDR has found a known SL but reports fewer SL RNA genes than expected - what am I missing?](#slidrguide6)
+        - [Should I use DGC or AGC clustering?](#agc)
     - [SLOPPR](#slopprguidelines)
+        - [Multiple SLs; some are specialised for resolving downstream operonic genes](#slopprguide1)
+        - [Multiple SLs; all are specialised for resolving downstream operonic genes](#slopprguide2)
+        - [Multiple SLs; all are specialised for resolving upstream and downstream operonic genes](#slopprguide3)
+        - [Multiple SLs; specialisation unknown](#slopprguide4)
+        - [Multiple SLs; specialisation absent](#slopprguide5)
+        - [Single SL; specialised for resolving downstream operonic genes](#slopprguide6)
+        - [Single SL; specialised for resolving upstream and downstream operonic genes](#slopprguide7)
+        - [Single SL; specialisation absent](#slopprguide8)
 - [Update log](#updates)
 - [Citation](#citation)
 
@@ -101,28 +116,28 @@ The script generates all input files and runs basic analyses, supplying the geno
 
     >Cel-SL2
 
-The on-screen SLIDR results detail the expected SL1 and SL2 sequences, the numbers of reads assembled, the numbers of SL RNA genes identified and the numbers of *trans*-spliced genes:
+The on-screen SLIDR results detail the expected SL1 and SL2 sequences, the numbers of reads assembled, the numbers of SL RNA genes identified and the numbers of *trans*-splice acceptor sites:
 
-                    Sequence Reads SL_RNA_Genes SLTS_Genes
-      GGTTTAATTACCCAAGTTTGAG  3039           10        884
-     gGTTTTAACCCAGTTTAACCAAG    78            1         48
+                   Consensus Reads SL_RNA_Genes SLTS_Sites
+      GGTTTAATTACCCAAGTTTGAG  6293           10       1217
+     GGTTTTAACCCAGTTTAACCAAG   159            1         67
 	 
-The on-screen SLOPPR results detail expectedly low SL-trans-splicing rates (5.1 %) and 84 predicted operons using SL2 as a polycistron resolver:
+The on-screen SLOPPR results detail expectedly low SL-trans-splicing rates (5.14 %) and 84 predicted operons using SL2 as a polycistron resolver:
 
     Numbers of genes receiving SLs:
-         not expressed  6230 31.43 %
-                 no SL 12583 63.47 %
-                   SL1   900  4.54 %
+         not expressed  6399 32.28 %
+                 no SL 12407 62.59 %
+                   SL1   907  4.58 %
                    SL2    96  0.48 %
                SL1+SL2    15  0.08 %
 
     Predicted operonic genes, operons and operon sizes (n = genes in operon):
-             Genes Operons n=2 n=3 n=4 n=5
-    SL2        180      84  75   7   1   1
-    Cluster1   536     257 238  17   1   1
-    Cluster2   664     314 284  25   4   1
+	         operonic operons n=2 n=3 n=4 n=5
+    SL2           180      84  75   7   1   1
+    Cluster1     1694     788 687  86  13   2
+    Cluster2      180      84  75   7   1   1
 
-Note that the SL-clustering algorithm is unlikely to correctly identify SL1/SL2-type SLs with only two ultra-low-coverage replicates. In the above run, the two clusters did not coincide with SL1/SL2 SLs, and the inferred operons are thus incorrect. Due to some degree of stochasticity, your run may produce different clusters and the numbers of genes and operons may be different.
+Note that the SL-clustering algorithm may not correctly identify SL1/SL2-type SLs with only two ultra-low-coverage replicates. In the above run, the two clusters coincided with SL1/SL2 SLs (cluster2 = SL2). Due to some degree of stochasticity, your run may produce incorrect clusters.
 
 <a name="reference"></a>
 ## Reference manual
@@ -146,7 +161,7 @@ Name prefix for predicted SLs or operons (default: SL for SLIDR and OP for SLOPP
 Threads (default: all available cores obtained by `nproc`)
 
 `-T <dir>`
-Path to directory for temporary files. Default is your system's TMPDIR; specifying this option will change TMPDIR. For running SLIDR, it is highly recommended to choose a large TMP directory to avoid bottlenecks associated with the default `/tmp` partition.
+Path to directory for temporary files. Default is your system's TMPDIR; specifying this option will change TMPDIR. For running SLIDR, it is highly recommended to choose a large TMP directory to avoid potential bottlenecks associated with the default `/tmp` partition.
 
 <a name="input"></a>
 #### RNA-Seq data input
@@ -159,7 +174,7 @@ Path to R1 reads in FASTQ(.gz) or FASTA(.gz) format.
 Path to R2 reads in FASTQ(.gz) or FASTA(.gz) format.
 
 `-q`
-If specified, basic quality-trimming of 3' ends of reads and removal of Illumina adapters is carried out using `cutadapt -a AGATCGGAAGAGC -q 20 -m 20`. It is recommended that raw data are inspected and trimmed thoroughly prior to running SLIDR or SLOPPR.
+If specified, basic quality-trimming of 3' ends of reads and removal of Illumina adapters is carried out using `cutadapt -a AGATCGGAAGAGC -q 20 -m 20`. This is a convenience function and is not intended to replace careful inspection and quality-control of raw data prior to running SLIDR or SLOPPR.
 
 `-b <file>`
 Path to read alignments in BAM format. A BAI index file must be present in the same location.
@@ -171,7 +186,7 @@ Read strandedness generated during chemical library prep. This parameter is equi
     1 = forward stranded data (R1 reads originate from sense strand)
     2 = reverse stranded data (R2 reads originate from sense strand)
 
-If strandedness is unknown, setting `-r x` will infer it if genome annotations are supplied. Unstranded analysis (`-r 0`) is always acceptable even for stranded data, but stranded data will produce much clearer results if the correct strandedness parameter is supplied. 
+If strandedness is unknown, setting `-r x` will infer it if genome annotations are supplied. If in doubt, unstranded analysis (`-r 0`) is always acceptable even for stranded data. Stranded data will produce less noisy results if the correct strandedness parameter is supplied. 
 
 Multiple libraries are not specified with these options but instead via a configuration file supplied with the `-m <file>` option. This tab-delimited file must contain six columns:
 - Column 1: Library name
@@ -204,13 +219,13 @@ Note: Avoid `#` characters in the file contents; they will be stripped!
 SLIDR requires either a genomic or transcriptomic reference assembly. A genomic reference is recommended and will produce vastly superior results. Genome annotations are recommended because they improve read mapping in HISAT2 and allow SLIDR to infer strandedness of the RNA-Seq data if unknown.
 
 `-g <file>`
-Path to genome assembly in FASTA format.
+Path to genome assembly in FASTA(.gz) format.
 
 `-a <file>`
-Path to genome annotations in GFF or GTF format.
+Path to genome annotations in GFF(.gz) or GTF(.gz) format.
 
 `-t <file>`
-Path to transcriptome assembly in FASTA format.
+Path to transcriptome assembly in FASTA(.gz) format.
 
 <a name="tailcluster"></a>
 #### Read tail clustering
@@ -245,13 +260,13 @@ Cluster read tails using abundance-based greedy clustering (AGC) instead of the 
 #### SL RNA filtering
 
 `-e <num>`
-BLASTN E-value (default: 1). This parameter controls the stringency of the alignment of the read tail cluster centroids against the reference assembly. The default value of 1 is appropriate for centroid lengths as low as 10 bp and should rarely require modifying. Decreasing the value will substantially reduce the numbers of reads passing filteres. Increasing the value will allow shorter centroids to be retained, which we found necessary when analysing the short 16bp SL in *Ciona intestinalis*. Note that increasing this value will substantially increase the numbers of sequence alignments to process.
+BLASTN E-value (default: 1). This parameter controls the stringency of the alignment of the read tail cluster centroids against the reference assembly. The default value of 1 is appropriate for centroid lengths as low as 10 bp and should rarely require modifying. Decreasing the value will require longer tail matches and thus substantially reduce the numbers of reads passing filteres. Increasing the value will allow shorter centroids to be retained, which we found necessary when analysing the short 16bp SL in *Ciona intestinalis*. Note that increasing this value will substantially increase the numbers of sequence alignments to process.
 
 `-D <chr>`
 Splice donor site pattern in regex notation (default: GT). Alternative nucleotides can be coded with character classes, for example, `-D 'G[TC]'` matches GT or GC, and `-D 'A[AG][TC]'` matches AAT, AAC, AGT or AGC. To switch off, specify empty character string (`-D ''`).
 
 `-S <chr>`
-*Sm* binding site motif and location in regex notation. This allows for searching additional motifs downstream of the splice donor site. The default (.{20,60}AT{4,6}G) matches the *Sm* binding sites ATTTTG, ATTTTTG or ATTTTTTG between 20 and 60 bases downstream of the splice donor. Any custom regex patterns are supported, for example, `-S '.{20,60}AT{4,6}G.{20,30}T{3,5}'` to add a T-rich region 20-30 bp downstream of the Sm binding site. To disable, specify empty character string (`-S ''`).
+*Sm* binding site motif and location in regex notation. This allows for searching additional motifs (*Sm* or otherwise) downstream of the splice donor site. The default (.{20,60}AT{4,6}G) matches the *Sm* binding sites ATTTTG, ATTTTTG or ATTTTTTG 20-60 bp downstream of the splice donor. Any custom regex patterns are supported, for example, `-S '.{20,60}AT{4,6}G.{20,30}T{3,5}'` to add a T-rich region 20-30 bp downstream of the *Sm* binding site. To disable, specify empty character string (`-S ''`).
 
 `-A <chr>`
 Splice acceptor site pattern in regex notation (default: AG). Alternative nucleotides can be coded with character classes, for example, `-A 'A[CG]'` matches GT or GC. To switch off, specify empty character string (`-A ''`)
@@ -260,7 +275,7 @@ Splice acceptor site pattern in regex notation (default: AG). Alternative nucleo
 Maximum SL RNA length excluding SL (default: 80). This length is measured starting from and including the splice donor site. The default of 80 bp is appropriate for nematode SL RNAs that are c. 100 bp long including a c. 22 bp SL.
 
 `-O <chr>`
-Maximum SL overlap with *trans*-splice acceptor site (default: 10). This parameter controls how much overlap is allowed between the 3' end of the SL and the *trans*-splice acceptor site. If a transcriptome reference is used, it might be prudent to decrease this value or even set it to 0 if the transcripts do not contain extra non-coding 5' bases.
+Maximum overlap between the 3' end of the SL and the *trans*-splice acceptor site (default: 10). If a transcriptome reference is used, it might be prudent to decrease this value or even set it to 0 if the transcripts do not contain extra non-coding 5' bases; this will reduce noise.
 
 `-L <chr>`
 Maximum base-pair span within stem-loop (default: 35). This parameter controls stem-loop prediction in RNAFold. The default requires the first and last base of a stem loop to be no more than 35 bp apart.
@@ -268,9 +283,9 @@ Maximum base-pair span within stem-loop (default: 35). This parameter controls s
 <a name="slidroutput"></a>
 #### Output files:
 
-Final results are written to the directory `3-results-[suffix]` inside the specified output directory. The suffix of the directory name summarises the specified parameters to allow for convenient parameter sweeps within the same output directory, for example `slidr_toy_data/3-results-x1.0-l8-e1-R80-DGT-S.{20,60}AT{4,6}G-L35-AAG-O10`
+Final results are written to the directory `3-results-[suffix]` inside the specified output directory. The suffix of the directory name summarises the specified parameters to allow for convenient parameter sweeps within the same output directory, for example `slidr_toy_data/3-results-x1.0-l8-AGC-e1-R80-DGT-S.{20,60}AT{4,6}G-L35-AAG-O10`
 
-- `SL.tsv`: tab-delimited table summarising SL sequence, read coverage, numbers of SL RNA genes, numbers of SL *trans*-spliced genes (acceptor sites), numbers of stem loops and structure stability statistics from [RNAFold](https://www.tbi.univie.ac.at/RNA/RNAfold.1.html) (MFE frequency and ensemble diversity)
+- `SL.tsv`: tab-delimited table summarising SL sequence, read coverage, numbers of SL RNA genes, numbers of SL *trans*-splice acceptor sites (equivalent to genes if genome annotations are accurate), numbers of stem loops and structure stability statistics from [RNAFold](https://www.tbi.univie.ac.at/RNA/RNAfold.1.html) (MFE frequency and ensemble diversity)
 - `raw.tsv`: same as `SL.tsv`, but including singleton SLs (defined by only a single read and/or spliced to only a single gene). 
 - `SL.fa`: all SL sequences in FASTA format
 - `SL_RNA_genes.fa`: all SL RNA gene sequences in FASTA format
@@ -289,10 +304,10 @@ Log files and intermediate output files are written to the directories `1-librar
 SLOPPR requires a genomic reference assembly and genome annotations. If annotations are not available, we recommend generating *de novo* annotations from the RNA-Seq data using [BRAKER2](https://github.com/Gaius-Augustus/BRAKER) or [STRINGTIE](http://ccb.jhu.edu/software/stringtie/).
 
 `-g <file>`
-Path to genome assembly in FASTA format.
+Path to genome assembly in FASTA(.gz) format.
 
 `-a <file>`
-Path to genome annotations in GFF or GTF format.
+Path to genome annotations in GFF(.gz) or GTF(.gz) format.
 
 <a name="slquantification"></a>
 #### SL quantification
@@ -301,16 +316,16 @@ Path to genome annotations in GFF or GTF format.
 Path to SL sequences in FASTA format. Ensure that each SL has a unique name (FASTA header).
 
 `-n <num>`
-Minimum bp from 3' end of SL required to detect SL tail in read (default: 8). Increase this value if the SLs cannot be distinguished reliably at their 3'-most 8 bases.
+Minimum bp from 3' end of SL required to detect SL tail in read (default: 8). Increase this value if the SLs cannot be distinguished reliably at their 3'-most 8 bases. Note that longer tails will substantially reduce the number of SL reads recovered.
 
 `-e <num>`
 Maximum error rate for SL tail matching (default: 0.09). The default error rate requires no mismatches for tails up to 10 bp total length and allows for 1 mismatch for each 10 bp additional length (0-10 bp: 0; 11-21 bp: 1; 22-32 bp: 2; 33-40 bp: 3).
 
 `-f <chr>`
-Feature ID field in GFF/GTF annotations used for counting reads. Read are counted against exons by default but if the genome annotations miss exon features, this option should be set to CDS instead. 
+GTF feature ID field used for counting reads (default: exon). If the genome annotations miss exon features, this option should be set to CDS. 
 
 `-F <chr>`
-Meta-feature ID field in GFF/GTF annotations used for summarising read counts. Reads are quantified against gene annotations (gene_id) by default, but some genome annotations may require to set a different meta-feature ID, for example transcript_id. 
+GTF meta-feature ID field used for summarising read counts (default: gene_id). If the genome annotations do not define genes, this option should be set to transcript_id. 
 
 <a name="operonprediction"></a>
 #### Operon prediction
@@ -319,10 +334,10 @@ Meta-feature ID field in GFF/GTF annotations used for summarising read counts. R
 Method for aggregating SL counts across libraries (default: geometric mean `-z geo`). The geometric mean is an appropriate statistic for summarising count data. We also implement sum and median, the latter of which may be more appropriate if giving weight to libraries with zero counts (see below).
 
 `-0` 
-Keep libraries with zero counts when aggregating SL counts (default: remove zeros). When keeping zeros, we recommend aggregating with the median instead of the geometric mean. The geometric mean will drop all counts if at least one libraries has zero counts - such an extremely stringent filter may be useful for removing lowly and inconsistently SL *trans*-spliced genes. 
+Keep libraries with zero counts when aggregating SL counts (default: remove zeros). When keeping zeros, we recommend aggregating with the median instead of the geometric mean. The geometric mean will drop all counts if at least one libraries has zero counts - such a stringent filter may be useful for removing lowly and inconsistently SL *trans*-spliced genes. 
 
 `-S <file>`
-Optional file containing the names or FASTA headers of SLs (from those supplied by `-s`) that are specialised for resolving polycistrons (SL2-type SLs). Omit this option if SL specialisation is unknown or absent. Note that SLOPPR will always infer SL1/SL2-type subfunctionalisation irrespective of `-S` and run a separate operon prediction using these inferred SL clusters. As a sanity check, the two inferred clusters should coincide with known SL1/SL2-type SLs. If SL2-type SLs are unknown, the two clusters represent the most likely candidates for SL1/SL2 types. 
+Optional file containing the names or FASTA headers of SLs (from those supplied by `-s`) that are specialised for resolving polycistrons (SL2-type SLs). Omit this option if SL specialisation is unknown or absent. Note that SLOPPR will additionally infer SL1/SL2-type subfunctionalisation irrespective of `-S` and do additional operon prediction runs using these inferred SL clusters. As a sanity check, the two inferred clusters should coincide with known SL1/SL2-type SLs. If SL2-type SLs are unknown, the two clusters represent the most likely candidates for SL1/SL2 types. 
 
 `-d <num>`
 Minimum SL2:SL1 read ratio required to classify a gene as downstream operonic (default: infinity, i.e. no SL1 reads). SLOPPR will carry out three independent operon prediction runs:
@@ -330,16 +345,17 @@ Minimum SL2:SL1 read ratio required to classify a gene as downstream operonic (d
 - Cluster1:Cluster2 >= d with inferred SL types
 - Cluster2:Cluster1 >= d with inferred SL types
 
-If at least two SLs are supplied and two SL-types exist, the SL2:SL1 read ratio can be relaxed to allow a proportion of SL1-type reads at downstream operonic genes. Many organisms with SL2-type SL specialisation do allow some degree of SL1-type *trans*-splicing at operonic genes, so it is worthwhile to tune this option based on the genome-wide distribution of SL2:SL1 ratios.
+Many organisms with SL2-type SL specialisation do allow some degree of SL1-type *trans*-splicing at downstream operonic genes, so it is worthwhile to relax this option (e.g., `-d 2`)and tune it based on the genome-wide distribution of SL2:SL1 ratios.
 
+<a name="upstreambias"></a>
 `-u`
-Enforce the same SL2-type bias at upstream operonic genes as at downstream operonic genes. The default behaviour is to require an upstream operonic gene to have SL1-type bias or not to be SL *trans*-spliced at all. Enforcing SL2-type bias at upstream genes is useful for extracting strictly SL2-*trans*-spliced operons.
+Enforce the same SL2-type bias at upstream operonic genes as at downstream operonic genes. By default, SLOPPR requires the upstream gene of an operon to have SL1-type bias or not to be SL *trans*-spliced at all. If no such gene is available, SLOPPR designates the first downstream gene as an ad-hoc upstream gene; operons with an "adhoc" upstream gene are flagged as provisional in the output because they violate the assumptions. The `-u` option results in a much stricter set of operons where all genes have SL2-bias.
 
 `-i <num>`
-Maximum intercistronic distance in predicted operons (default: infinity; x = infer). By default, SLOPPR predicts operonic genes solely based on SL2-bias and ignores intercistronic distances. This may mean that some operonic genes have unrealistically large intercistronic distances. Such false predictions can be avoided by supplying a fixed cutoff (for example, `-i 100`) or using automatic inference of the most likely cutoff (`-i x`) given the distribution of intercistronic distances among the initial set of operonic genes. Filtering by intercistronic distance is particularly important in organisms where no SL specialisation exists; in these situations one must tease apart operonic from monocistronic SL-receiving genes by exploring intercistronic distance distributions among genes.
+Maximum intercistronic distance in predicted operons (default: infinity; x = infer). By default, SLOPPR predicts operonic genes solely based on SL2-bias and ignores intercistronic distances. This may mean that some operonic genes have unrealistically large intercistronic distances. Such false predictions can be avoided by supplying a fixed cutoff (for example, `-i 100`) or using automatic inference of the most likely cutoff (`-i x`) given the distribution of intercistronic distances among the initial set of operonic genes. Filtering by intercistronic distance is particularly important in organisms where no SL specialisation exists; in these situations one must tease apart operonic from monocistronic SL-receiving genes by exploring intercistronic distance distributions among SL *trans*-spliced genes.
 
 `-x <path>`
-Reference operon annotations (GFF/GTF). If supplied, SLOPPR will examine predicted operons for overlap with these reference operons. Note that the GFF/GTF must contain only a single record per operon that spans all operonic genes. Do not include "gene" entries for individual operonic genes.
+Reference operon annotations (GFF/GTF). If supplied, SLOPPR will examine predicted operons for overlap with these reference operons. Note that the GFF/GTF must contain only a single record per operon that spans all operonic genes. Do not include "gene" entries for individual operonic genes. This is a convenience option that is not designed to replace thorough synteny analysis.
 
 <a name="slopproutput"></a>
 #### Output files:
@@ -363,8 +379,8 @@ Operon prediction results are written to the subdirectory `3-operons-[suffix]`. 
 - `*.SL_readratio.txt`: quartiles of SL2:SL1, Cluster1:Cluster2 and Cluster2:Cluster1 read ratios across genes that receive both SL types.
 - `*.operons.summary.txt`: numbers of operons, operonic genes and distribution of operon sizes, using either SL2, Cluster1, or Cluster2 as polycistron resolvers
 - `*.operons.intergenic_distances.txt`: quartiles of intercistronic (=operonic) and intergenic (=non-operonic) distances, using either SL2, Cluster1, or Cluster2 as polycistron resolvers
-- `*.operons.[SL2|Cluster1|Cluster2].txt`: gene names, locations, distances, background gene expression (TPM) SL1/SL2 read counts (CPM), SL2:SL1 read ratios and inferred operonic status among all genes, using either SL2, Cluster1, or Cluster2 as polycistron resolvers
-- `*.operons.[SL2|Cluster1|Cluster2].gff3`: predicted operons and operonic genes in GFF3 format, using either SL2, Cluster1, or Cluster2 as polycistron resolvers
+- `*.operons.[SL2|Cluster1|Cluster2].txt`: gene names, locations, distances, background gene expression (meanTPM), SL1/SL2 read counts (CPM), SL2:SL1 read ratios, inferred operonic status and quality (*pass* or *adhoc*; see [`-u` option](#upstreambias)) of all genes, using either SL2, Cluster1, or Cluster2 as polycistron resolvers
+- `*.operons.[SL2|Cluster1|Cluster2].gff3`: predicted operons and operonic genes in GFF3 format, using either SL2, Cluster1, or Cluster2 as polycistron resolvers. Operons are flagged as *quality:provisional* if they contain *adhoc* upstream genes (see [`-u` option](#upstreambias))
 
 Most of these files are also available in graphical format as PDF. Log files and intermediate output files are written to the directories `1-library_[library name]` and `2-counts`.
 
@@ -374,12 +390,16 @@ Most of these files are also available in graphical format as PDF. Log files and
 <a name="slidrguidelines"></a>
 ### SLIDR
 
+<a name="slidrguide1"></a>
 #### I have got an unannotated draft genome for my organism - is this good enough?
 
 Yes, genome annotations are not mandatory and SLIDR will function fine without them. However, genome annotations are useful for two reasons:
 - Initial read alignment with HISAT2 benefits from exon/intron boundaries and splice sites defined by genome annotations
 - Unknown library strandedness can be inferred from read alignments and genome annotations
 
+Note that all SLIDR results are solely based on read alignments and make no reference to annotated genes.
+
+<a name="slidrguide2"></a>
 #### I have got neither a genome nor a transcriptome for my organism - can I run SLIDR?
 
 Yes, you can assemble transcripts (for example, using [TRINITY](https://github.com/trinityrnaseq/trinityrnaseq)) and supply these as a reference assembly to SLIDR:
@@ -388,6 +408,7 @@ Yes, you can assemble transcripts (for example, using [TRINITY](https://github.c
 
 Note that SL RNA filters (`-D` and `-S`) will only work if your assembly contains SL RNAs. Your mileage may vary!
 
+<a name="slidrguide3"></a>
 #### SLs and SL RNAs are entirely uncharacterised in my organism - how do I get started with SLIDR?
 
 If your organism is a nematode, run SLIDR with default parameters, which are optimised for nematode SLs. If your organism is a different eukaryote, modify or switch off the *Sm* binding motif filter (`-S ''`) and allow longer read tails (`-x 1.5`) to capture a broad range of tail lengths:
@@ -398,16 +419,19 @@ Use this initial SLIDR output to build a more stringent set of filters for a sec
 
     slidr.sh -D '' -S '' -A '' -e 5 -x 1.5
 
+<a name="slidrguide4"></a>
 #### SLs and SL RNAs are already characterised in my organism - do I need to run SLIDR?
 
 In our experience, SLIDR often detects novel SL variants and in some cases perhaps even novel SL classes. SLIDR is also useful for telling apart functional SL RNA genes from pseudogenes. We recommend SLIDR as a tool for initial data exploration to uncover untapped SL diversity even if the canonical SL sequences are already known.
 
+<a name="slidrguide5"></a>
 #### My organism has very diverse SLs with vastly different SL RNA characteristics - how to run SLIDR?
 
 The safest way is to run SLIDR multiple times, each time optimising parameters for each SL type. Alternatively, try and define parameters such that they capture all SL types at once. For example, in *Hydra vulgaris* where two major SL classes exist with different SL lengths and *Sm* binding motifs, the following parameters capture both SL types:
 
     slidr.sh -S '.{10,35}[AG]ATTTT[CG][AG]' -x 1.4 -R 60
 
+<a name="slidrguide6"></a>
 #### SLIDR has found a known SL but reports fewer SL RNA genes than expected - what am I missing?
 
 SLIDR is not designed to find all possible SL RNA genes in a genome. SL RNA genes must be expressed, i.e. the SL encoded by the gene must be detected as a read tail and pass length filters. Similarly, the SL RNA gene must satisfy the splice donor, splice acceptor and *Sm* binding motif filters. This means that SLIDR will report all possible expressed SL RNA genes given the RNA-Seq libraries, but will not report unexpressed genes or genes not satisfying functional motif filters (since these may be pseudogenes). If a comprehensive annotation of putative SL RNA genes is required, [SLFinder](https://github.com/LBC-Iriarte/SLFinder) is a more appropriate tool.
@@ -464,7 +488,7 @@ Conversely, using DGC, tail 5 clusters correctly with tail 2 because it is longe
 	X:                  TAGTTTGAG      5000
 
 It is obvious that the two clustering methods are bound to yield very different results in organisms with many SL variants that happen to be conserved at the 3' end. In those cases, short tails will match multiple SLs and ties must be broken arbitrarily (length or abundance).
-Most datasets we have analysed yield better results with the default DGC, but others performed poorly and improved dramatically with AGC. We therefore suggest to use the default DGC and try AGC if SL read coverage is suspiciously low.
+Most datasets we have analysed yield better results with the default DGC, but others performed poorly and improved dramatically with AGC. We therefore suggest using the default DGC and trying AGC if SL read coverage is suspiciously low.
 
 #### I want to analyse hundreds of RNA-Seq libraries - can SLIDR handle it?
 
@@ -473,50 +497,55 @@ Yes, but be aware of bottlenecks:
 - Tail alignment with BLASTN may be time consuming despite multithreading.
 - Final SL consensus calling in R may require large amounts of RAM if many millions of reads pass filters.
 
-Future updates may support more efficient data structures and automatic HPC job control. SLIDR typically does not need huge amounts of data, so consider starting with a small number of libraries.
+Future updates may support more efficient data structures and automatic HPC job control. SLIDR typically does not need huge amounts of raw data to yield robust results, so consider starting with a small number of libraries.
 
 <a name="slopprguidelines"></a>
 ### SLOPPR
 
 SLOPPR finds operons by designating downstream operonic genes via SL2-type bias; upstream genes are then added to each tract of downstream operonic genes. Therefore, you must identify what SLs your organism uses to resolve downstream operonic genes. This may be a specialised set of SLs that are not usually added to any other genes, or it may be the same SLs that are also added to upstream operonic or monocistronic genes. SLOPPR can model virtually any scenario, but requires careful specification of several parameters (`-S`, `-u`, `-d`, `-i`)
 
+<a name="slopprguide1"></a>
 #### Multiple SLs; some are specialised for resolving downstream operonic genes
 
-This is the default SL1/SL2-type scenario encountered in *C. elegans* and many other nematodes. Simply supply a text file containing the names of the SL2-type SLs with the `-S` option:
+This is the default SL1/SL2-type scenario encountered in *C. elegans* and many other nematodes. It is a good place to start even if your organism is not a nematode. Simply supply a text file containing the names of the SL2-type SLs with the `-S` option:
 
     sloppr.sh -s sl_sequences.fasta -S sl2-type.txt
 
-SLOPPR will designate downstream operonic genes via SL2-type bias and disallow SL2-type bias for upstream operonic genes. Use the `-u` option to enforce SL2-bias at upstream operonic genes if appropriate. Relax the SL2:SL1 ratio (`-d` option) if you want to allow some SL1-type reads at downstream genes, and also use the `-i` option to set a maximum intercistronic distance (e.g., 500 bp) if appropriate:
+SLOPPR will designate downstream operonic genes via SL2-type bias and disallow SL2-type bias for upstream operonic genes where possible. Relax the SL2:SL1 ratio (`-d` option) if you want to allow some SL1-type reads at downstream genes, and also use the `-i` option to set a maximum intercistronic distance (e.g., 500 bp) if appropriate:
 
-    sloppr.sh -s sl_sequences.fasta -S sl2-type.txt -u -d 2 -i 500
+    sloppr.sh -s sl_sequences.fasta -S sl2-type.txt -d 2 -i 500
 
 Note that SLOPPR also carries out additional prediction runs using inferred SL types instead of those supplied with `-S`. Use the SL clustering results and the predicted operons is as a sanity check to verify that the assumed SL1/SL2-type SLs are plausible. If SLOPPR's inferred SL clusters do not coincide with the assumed SL1/SL2 types, consider that you may have mis-specified your SLs or your SL types may not be as well characterised as expected. 
 
+<a name="slopprguide2"></a>
 #### Multiple SLs; all are specialised for resolving downstream operonic genes
 
 Omit the `-S` option to automatically designate all SLs as "SL2-type":
 
     sloppr.sh -s sl_sequences.fasta
 
-Since SL2:SL1 ratios are undefined in this case, every gene receiving any SL will be designated as downstream operonic. Each operon will also receive an upstream gene that is not SL *trans*-spliced. By definition, no monocistronic SL-receiving genes are designated.
+Since SL2:SL1 ratios are undefined in this case, every gene receiving any SL will be designated as downstream operonic. Each operon will also receive an upstream gene that is not SL *trans*-spliced (if possible). By definition, no monocistronic SL-receiving genes are designated.
 
 Use the inferred SL clustering as a sanity check to verify absence of SL subfunctionalisation.
 
+<a name="slopprguide3"></a>
 #### Multiple SLs; all are specialised for resolving upstream and downstream operonic genes
 
 As above, but use the `-u` option to enforce SL2-type bias at upstream operonic genes:
 
     sloppr.sh -s sl_sequences.fasta -u
 
+<a name="slopprguide4"></a>
 #### Multiple SLs; specialisation unknown 
 
 Omit the `-S` option and carefully inspect the SL clustering results for plausible SL1/SL2-type subfunctionalisation:
 
     sloppr.sh -s sl_sequences.fasta
 
+<a name="slopprguide5"></a>
 #### Multiple SLs; specialisation absent
 
-In this scenario, both operonic and monocistronic genes receive the same SLs. Instead of using SL2:SL1 read ratios, we must tease out operonic genes via short intercistronic distances from monocistronic genes with large intergenic distances. 
+In this situation, both operonic and monocistronic genes receive the same SLs. Instead of using SL2:SL1 read ratios, we must tease out operonic genes via short intercistronic distances from monocistronic genes with large intergenic distances. 
 
 First, omit the `-S` option and observe vastly inflated intercistronic distances (because every gene receiving any SL will be designated as downstream operonic):
 
@@ -529,18 +558,21 @@ Then, run the automatic intercistronic distance filter, or specify a cutoff dire
 
 These filters will cause SL-receiving genes with large intergenic distances to be designated as "monocistronic".
 
+<a name="slopprguide6"></a>
 #### Single SL; specialised for resolving downstream operonic genes
 
 Omit the `-S` option and ignore all SL clustering results:
 
     sloppr.sh -s sl_sequences.fasta
 
+<a name="slopprguide7"></a>
 #### Single SL; specialised for resolving upstream and downstream operonic genes
 
 As above, but use the `-u` option to enforce SLs at upstream operonic genes:
 
     sloppr.sh -s sl_sequences.fasta -u
 
+<a name="slopprguide8"></a>
 #### Single SL; specialisation absent
 
 As above, but use intercistronic distance filtering to designate monocistronic genes:
@@ -559,9 +591,13 @@ Future updates may support more efficient data structures and automatic HPC job 
 <a name="updates"></a>
 # Update log
 
+## 23/03/2021
+- SLIDR 1.1.4: fixed compatibility issue with awk version <4.0; added dustmasking to tails to reduce computational burden of repetitive tails; reduced R memory usage for highly repetitive data; re-tuned strandedness inference (more conservative) 
+- SLOPPR 1.1.3: fixed bugs when using single-end data; added *quality* attribute to operon GFF to flag provisional operons with missing upstream genes
+
 ## 19/02/2021
 - SLIDR 1.1.3: added option to choose distance-based or abundance-based greedy clustering (DGC, AGC); fixed out-of-memory errors with large datasets; added gzip support for genome/transcriptome and annotations
-- SLOPPR 1.1.2: improved gene-curation algorithm; now splits consecutive exons if reads are shorter than exon length; added gzip support for genome and annotations; fixed compatibility issue with SUBREAD 2.0.1; added TPM to output GFF
+- SLOPPR 1.1.2: improved gene-curation algorithm: now splits consecutive exons if reads are shorter than exon length; added gzip support for genome and annotations; fixed compatibility issue with SUBREAD 2.0.1; added TPM to output GFF
 
 ## 01/02/2021
 
@@ -575,9 +611,9 @@ Future updates may support more efficient data structures and automatic HPC job 
 <a name="citation"></a>
 # Citation
 
-Please cite the bioRxiv preprint:
+Please cite the BMC Bioinformatics article:
 
 Marius A. Wenzel, Berndt Mueller, Jonathan Pettitt. SLIDR and SLOPPR: Flexible identification of spliced leader trans-splicing and prediction of eukaryotic operons from RNA-Seq data.
-bioRxiv 2020.12.23.423594; [doi: https://doi.org/10.1101/2020.12.23.423594](https://doi.org/10.1101/2020.12.23.423594)
+Bioinformatics 22, 140 (2021), [doi: https://doi.org/10.1186/s12859-021-04009-7](https://bmcbioinformatics.biomedcentral.com/articles/10.1186/s12859-021-04009-7)
 
 

@@ -7,6 +7,7 @@ function timestamp {
 
 function load_dependencies {
 	# ensure that all dependencies are in PATH
+	# MODIFY/DELETE THESE CALLS ACCORDING TO YOUR MACHINE
 	echo -e "#\n$(timestamp) >>> Loading dependencies"
 	module load hisat2-2.1.0
 	module load samtools-1.9
@@ -18,7 +19,7 @@ function load_dependencies {
 	module load subread-1.6.2
 }
 
-title="#\n# SLOPPR - Spliced-Leader-informed Operon Prediction from RNA-Seq data\n# Version 1.1.2\n#"
+title="#\n# SLOPPR - Spliced-Leader-informed Operon Prediction from RNA-Seq data\n# Version 1.1.3\n#"
 
 function printhelp {
 	echo -e "$title"
@@ -33,11 +34,11 @@ function printhelp {
 	echo -e '#    -T <num>\tTEMP directory (default: $TMPDIR)'
 	echo -e '#    -h\t\tPrint this help page'
 	echo -e "#\n# Reference assembly:"
-	echo -e '#    -g <file>\tPath to genome assembly (FASTA[.GZ])'
-	echo -e '#    -a <file>\tPath to genome annotations (GFF/GTF[.GZ])'
+	echo -e '#    -g <file>\tPath to genome assembly (FASTA[.gz])'
+	echo -e '#    -a <file>\tPath to genome annotations (GFF/GTF[.gz])'
 	echo -e "#\n# Single RNA-Seq library:"
-	echo -e '#    -1 <file>\tPath to R1 reads (FASTQ.GZ)'
-	echo -e '#    -2 <file>\tPath to R2 reads (FASTQ.GZ)'
+	echo -e '#    -1 <file>\tPath to R1 reads (FASTQ[.gz])'
+	echo -e '#    -2 <file>\tPath to R2 reads (FASTQ[.gz])'
 	echo -e '#    -b <file>\tPath to read alignments (BAM)'
 	echo -e '#    -r <num>\tRead strandedness (0=unstranded; 1=stranded; 2=reverse-stranded; x=infer; default: x)'
 	echo -e "#    -q\t\tQuality-trim 3' ends of reads and remove adapters"
@@ -304,7 +305,7 @@ print_summary >> "$outdir/0-command_summary.txt"
 echo "$(timestamp) >>> STAGE 1: SL read identification"
 
 # if genome is zipped, copy and unzip
-if [ "$(file "$genome" | grep -i gzip)" ]; then
+if [ "$(file $genome | grep -i gzip)" ]; then
 	if [ ! -f $outdir/genome.fa ]; then
 		gunzip -c $genome > $outdir/genome.fa
 	fi
@@ -316,16 +317,20 @@ fi
 # convert GFF to GTF if required
 gtf="$outdir/annotations.gtf"
 if [ ! -f $gtf ]; then
-	echo "$(timestamp) Fetching annotations ..."
+	echo "$(timestamp) Processing annotations ..."
 	gropts="--force-exons --gene2exon --keep-genes -M -K -Q -C -T"
 	fform="$(file $ann)"
 	if [[ "$fform" =~ "gzip" ]] && [[ "$fform" =~ ".gtf" ]]; then
+		# gzipped GTF
 		gunzip -c $ann > $gtf
 	elif [[ "$fform" =~ "gzip" ]] && [[ ! "$fform" =~ ".gtf" ]]; then
+		# gzipped GFF
 		gunzip -c $ann | gffread $gropts -o $gtf
 	elif [[ ! "$fform" =~ "gzip" ]] && [[ "$fform" =~ ".gtf" ]]; then
+		# unzipped GTF
 		cp $ann $gtf
 	else
+		# unzipped GFF
 		gffread $ann $gropts -o $gtf
 	fi
 fi
@@ -403,38 +408,54 @@ function genome_align {
 }
 
 function infer_strandedness {
-	if [[ ! "$stranded" =~ [012] ]]; then
+	# check BAM to infer whether we have SE or PE reads
+	# if SE, must treat as unstranded data
+	# if PE, infer strandedness if requested
+	npe=$({ samtools view -H $bam ; samtools view $bam | head -n 10000; } | samtools view -c -f 1 -)	
+	if [ "$npe" == "0" ]; then
+		stranded=0
+	elif [[ ! "$stranded" =~ [012] ]]; then
 		# infer strandedness
 		# + strand
-		gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="+"' $ann | bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 100 -i -)
+		gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="+"' $ann \
+			| bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 1000 -i -)
 		pR1=$(echo "$gtfsample" | samtools view -c -F 20 -f 64 -M -L - $bam)
 		pR2=$(echo "$gtfsample" | samtools view -c -F 20 -f 128 -M -L - $bam)
-
-		# - strand
-		gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="-"' $ann | bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 100 -i -)
+			# - strand
+		gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="-"' $ann \
+			| bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 1000 -i -)
 		mR1=$(echo "$gtfsample" | samtools view -c -F 4 -f 80 -M -L - $bam)
 		mR2=$(echo "$gtfsample" | samtools view -c -F 4 -f 144 -M -L - $bam)
-
-		# summarise
+			# summarise
 		R1=$((pR1+mR1))
 		R2=$((pR2+mR2))
-		sR1=$((100*R1/(R1+R2)))
-		sR2=$((100*R2/(R1+R2)))
-		infstr=$(( 1 + 2*(sR1<40) - (sR1<60)))
-		#echo -e "R1: $R1 \t $sR1 %"
-		#echo -e "R2: $R2 \t $sR2 %"
-		#echo -e "Strandedness:\t $infstr"
-		echo "$(timestamp) Inferred library strandedness: $infstr"
-		stranded=$infstr
+		if [ $((R1+R2)) == 0 ]; then
+			# double-check for single-end data; must be analysed as unstranded
+			stranded=0
+		else
+			# need at least 30:70 bias to infer as stranded
+			sR1=$((100*R1/(R1+R2)))
+			sR2=$((100*R2/(R1+R2)))
+			stranded=$(( 1 + 2*(sR1<=30) - (sR1<=70)))
+		fi
+		echo "$(timestamp) Inferred library strandedness: $stranded"
 	fi
 }
 
 function quantify_background {
+	# PE data needs -p flag in featureCounts
+	if [ "$npe" == "0" ]; then
+		fcpaired=""
+	else
+		fcpaired="-p"
+	fi
+
 	# quantify end2end alignments
+	# use actual strandedness
 	if [ ! -f $bam.fc.txt ]; then
 		echo "$(timestamp) Quantifying background gene coverage ..."	
 		featureCounts -a $ann -o $bam.fc.txt \
-			-t $featureid -g $metafeatureid -s $stranded -p -C -O -M -T $threads \
+			-t $featureid -g $metafeatureid -s $stranded $fcpaired -C -O -M -T $threads \
 			$bam > $outdir/$lib/log_featureCounts.bg.txt 2>&1
 	fi
 	
@@ -443,28 +464,26 @@ function quantify_background {
 	if [ ! -f $outdir/$lib/untrimmed.bam.txt ]; then
 		echo "$(timestamp) Quantifying untrimmed reads ..."	
 		featureCounts -a $ann -o $outdir/$lib/untrimmed.bam.txt \
-			-t $featureid -g $metafeatureid -s $(($stranded>0)) -p -C -O -M -T $threads \
+			-t $featureid -g $metafeatureid -s $(($stranded>0)) $fcpaired -C -O -M -T $threads \
 			$outdir/$lib/untrimmed.bam > $outdir/$lib/log_featureCounts.untrimmed.txt 2>&1
 	fi
 }
 
 function read_extract {
 	# For PE data, we want unmapped reads with mapped mates. The unmapped mate is the SL candidate
-	# rev-stranded data (-s 2): R2 read unmapped, R1 mate mapped	-f 132	-F 264		-f 72	-F 260	
-	# fwd-stranded data (-s 1): R1 read unmapped, R2 mate mapped 	-f 68	-F 264		-f 136	-F 260
-	# unstranded data (-s 0): No distinction between R1 and R2		-f 4	-F 264		-f 8	-F 260
+	# only use primary alignments 
+	# rev-stranded data (-r 2): R2 read unmapped, R1 mate mapped	-f 132	-F 264		-f 72	-F 260	
+	# fwd-stranded data (-r 1): R1 read unmapped, R2 mate mapped 	-f 68	-F 264		-f 136	-F 260
+	# unstranded data (-r 0): No distinction between R1 and R2		-f 4	-F 264		-f 8	-F 260
 	# For SE data, we simply want unmapped reads (-f 4)
 
 	if [ ! -f $outdir/$lib/SL.candidates.fastq.gz ]; then
 		echo "$(timestamp) Extracting candidate reads ..."
-		# check BAM file to identify whether we have PE or SE data
-		npe=$({ samtools view -H $bam ; samtools view $bam | head -n 10000; } | samtools view -c -f 1 -)
 		if [ "$npe" == "0" ]; then		# SE reads
 			# unmapped SE reads
 			samtools view -h -f 4 $bam \
 				| samtools sort -n - \
-				| samtools fastq -n -s $outdir/$lib/SL.candidates.fastq.gz - \
-				> $outdir/$lib/log_samtoolsfastq.txt 2>&1
+				| samtools fastq -n - 2> $outdir/$lib/log_samtoolsfastq.txt | gzip > $outdir/$lib/SL.candidates.fastq.gz
 		else	# PE reads
 			# unmapped reads
 			samtools view -h -f $((4+ (64*$stranded))) -F 264 $bam \
@@ -477,23 +496,23 @@ function read_extract {
 				| samtools fastq -n -s $outdir/$lib/SL.mates.fastq.gz - \
 				> $outdir/$lib/log_samtoolsfastq_mates.txt 2>&1
 		fi
-	nr=$(grep -o "[0-9]* reads" $outdir/$lib/log_samtoolsfastq.txt | grep -o "[0-9]*")
-	echo "$(timestamp) Found $nr candidate read(pair)s ..."
+		nr=$(grep -o "[0-9]* reads" $outdir/$lib/log_samtoolsfastq.txt | grep -o "[0-9]*")
+		echo "$(timestamp) Found $nr candidate read(pair)s ..."
 	fi
 }
 
 function sl_screen {
 	if [ $(find -L $outdir/$lib -name "*5p.fastq.gz" | wc -l) == 0 ]; then
-		echo "$(timestamp) Screening candidate reads for spliced leaders ..."
-		if [ "$R2" == "" ]; then
+		echo "$(timestamp) Screening candidate reads for SLs ..."
+		if [ "$npe" == "0" ]; then
 			# SE
 			# We also need to check the rev complement of the reads (unstranded data)
-				seqtk seq -r $outdir/$lib/SL.candidates.fastq.gz | gzip -c \
-				cat $outdir/$lib/SL.candidates.fastq.gz - |
-				cutadapt -g file:$sls \
+			{ seqtk seq -r $outdir/$lib/SL.candidates.fastq.gz; 
+			  seqtk seq $outdir/$lib/SL.candidates.fastq.gz; } \
+				| cutadapt -g file:$sls \
 				-O $slength -e $err -m 15 \
 				--untrimmed-output $outdir/$lib/untrimmed.5p.fastq.gz \
-				-o $outdir/$lib/{name}.5p.fastq.gz > $outdir/$lib/log_SL.cutadapt.txt 2>&1
+				-o $outdir/$lib/{name}.5p.fastq.gz - > $outdir/$lib/log_SL.cutadapt.txt 2>&1
 		else
 			# PE
 			cutadapt -g file:$sls \
@@ -505,36 +524,44 @@ function sl_screen {
 				$outdir/$lib/SL.candidates.fastq.gz \
 				$outdir/$lib/SL.mates.fastq.gz > $outdir/$lib/log_SL.cutadapt.txt 2>&1
 		fi
-		nadapt=$(grep "Read 1 with adapter" $outdir/$lib/log_SL.cutadapt.txt | sed 's/.*  //g')
+		nadapt=$(grep "with adapter" $outdir/$lib/log_SL.cutadapt.txt | head -n 1 | sed 's/.*  //g')
 		echo "$(timestamp) $nadapt SL tails found among candidate reads"
 	fi
 }
 
 function sl_realign {
-	# align all SL reads back to the genome
+	# align SL reads (and untrimmed reads) back to the genome
 	for SL in $(grep "^>" $sls | tr -d ">") untrimmed
 	do
 		if [ ! -f $outdir/$lib/$SL*.bam ]; then
-			if [ "$SL" == "untrimmed" ]; then
-				hisat_options=""
-				nr=""
-				suff=""
-			else
-				hisat_options="--no-softclip "
-				nr=" $(grep -A 2 "$SL" $outdir/$lib/log_SL.cutadapt.txt | tail -n 1 | grep -o "[0-9]* times" | grep -o "[0-9]*")"
-				suff=".fc"
-			fi
-			echo "$(timestamp) Aligning$nr $SL reads ..."
-			if [ "$R2" == "" ]; then
+			# SE or PE data
+			hisat_options=""
+			if [ "$npe" == "0" ]; then
 				hisat_options+="-U $outdir/$lib/$SL.5p.fastq.gz"
 			else
 				hisat_options+="-1 $outdir/$lib/$SL.5p.fastq.gz -2 $outdir/$lib/$SL.mates.fastq.gz"
 			fi
-			hisat2 -x $outdir/hisat2_index/genome $hisat_options -p $threads 2> $outdir/$lib/log_$SL.hisat2.txt \
-				| samtools view -@ $threads -h -f 64 - \
-				| samtools sort -@ $threads -n - \
-				| samtools fixmate -@ $threads - - \
-				| samtools sort -O bam -@ $threads -o $outdir/$lib/$SL$suff.bam - 2>> $outdir/$lib/log_$SL.hisat2.txt
+			# untrimmed or SL
+			if [ "$SL" == "untrimmed" ]; then
+				# untrimmed reads are allowed softclipping
+				# keep mates if we have PE data
+				suff=""
+				echo "$(timestamp) Aligning $SL reads ..."
+				hisat2 -x $outdir/hisat2_index/genome $hisat_options -p $threads 2> $outdir/$lib/log_$SL.hisat2.txt \
+					| samtools sort -O bam -@ $threads -o $outdir/$lib/$SL$suff.bam - 2>> $outdir/$lib/log_$SL.hisat2.txt
+			else
+				# trimmed SL reads must align end-to-end
+				# align mates (if available) to aid alignment,
+				# but remove them from the BAM file afterwards (we want to quantify the 5' end only)
+				suff=".fc"
+				nr=" $(grep -A 2 "$SL" $outdir/$lib/log_SL.cutadapt.txt | tail -n 1 | grep -o "[0-9]* times" | grep -o "[0-9]*")"
+				echo "$(timestamp) Aligning$nr $SL reads ..."
+				hisat2 -x $outdir/hisat2_index/genome --no-softclip $hisat_options -p $threads 2> $outdir/$lib/log_$SL.hisat2.txt \
+					| samtools view -@ $threads -h -f $((64*($npe>0))) - 2>> $outdir/$lib/log_$SL.hisat2.txt \
+					| samtools sort -@ $threads -n - 2>> $outdir/$lib/log_$SL.hisat2.txt \
+					| samtools fixmate -@ $threads - - 2>> $outdir/$lib/log_$SL.hisat2.txt \
+					| samtools sort -O bam -@ $threads -o $outdir/$lib/$SL$suff.bam - 2>> $outdir/$lib/log_$SL.hisat2.txt
+			fi
 			samtools flagstat $outdir/$lib/$SL$suff.bam > $outdir/$lib/$SL$suff.bam.flagstat 
 			samtools index -@ $threads -b $outdir/$lib/$SL$suff.bam
 		fi
@@ -581,19 +608,25 @@ do
 		samtools index $mergedir/$SL.all-libraries.bam
 	fi
 done
-# for each SL type (if known)
+# for each SL type (if unknown, merge all)
 if [ ! "$sl2s" == "" ] && [ ! -f $mergedir/allSL2-type.all-libraries.bam ]; then
+	# SL1-type
 	find $outdir/1-library_* -name "*.bam" \
 		| grep -Fw -f <(grep "^>" $sls | tr -d ">" | grep -Fwv -f <(tr -d ">" < $sl2s)) \
 		| xargs samtools merge $mergedir/allSL1-type.all-libraries.bam
 	samtools flagstat $mergedir/allSL1-type.all-libraries.bam > $mergedir/allSL1-type.all-libraries.bam.flagstat
 	samtools index $mergedir/allSL1-type.all-libraries.bam
-	
+	# SL2-type
 	find $outdir/1-library_* -name "*.bam" \
 		| grep -Fw -f <(grep "^>" $sls | tr -d ">" | grep -Fw -f <(tr -d ">" < $sl2s)) \
 		| xargs samtools merge $mergedir/allSL2-type.all-libraries.bam
 	samtools flagstat $mergedir/allSL2-type.all-libraries.bam > $mergedir/allSL2-type.all-libraries.bam.flagstat
 	samtools index $mergedir/allSL2-type.all-libraries.bam
+elif [ "$sl2s" == "" ] && [ ! -f $mergedir/allSLs.all-libraries.bam ]; then
+	find $outdir/1-library_* -name "*.fc.bam" \
+		| xargs samtools merge $mergedir/allSLs.all-libraries.bam
+	samtools flagstat $mergedir/allSLs.all-libraries.bam > $mergedir/allSLs.all-libraries.bam.flagstat
+	samtools index $mergedir/allSLs.all-libraries.bam
 fi
 
 #
@@ -611,18 +644,13 @@ if [ ! -f $ctdir/SL.featureCounts.genes.raw.txt ]; then
 		$outdir/*/*.fc.bam > $ctdir/log_featureCounts.genes.txt 2>&1
 fi
 if [ ! -f $ctdir/SL.featureCounts.exons.raw.txt ]; then
-	echo "$(timestamp) Quantifying SL reads against exons ..."	
+	echo "$(timestamp) Quantifying SL reads against ${featureid}s ..."	
 	featureCounts -a $outdir/annotations.unique_exons.gtf -o $ctdir/SL.featureCounts.exons.raw.txt \
 		-t $featureid -g $metafeatureid -f -s 1 -O -M -T $threads \
 		$outdir/*/*.fc.bam > $ctdir/log_featureCounts.exons.txt 2>&1
 fi
-# non-SL counts (background end-to-end alignments)
-#if [ ! -f $outdir/counts/bg.featureCounts.genes.raw.txt ]; then
-#	echo "$(timestamp) Quantifying background gene coverage ..."	
-#	featureCounts -a $ann -o $outdir/counts/bg.featureCounts.genes.raw.txt \
-#		-t $featureid -g $metafeatureid -s $stranded -p -C -O -M -T $threads \
-#		$outdir/*/end2end_pre-align.bam > $outdir/counts/log_featureCounts.bg.genes.txt 2>&1
-#fi
+
+# summarise background counts
 if [ ! -f $ctdir/bg.featureCounts.genes.raw.txt ]; then
 	# paste 7th column for all background count files
 	fcbg=($outdir/*/end2end_pre-align.bam.fc.txt)
@@ -655,11 +683,6 @@ if [ ! -f $ctdir/un.featureCounts.genes.raw.txt ]; then
 		done | paste -s -d ' ')
 	eval "paste <(cut -f 1 $fcbg) $x" > $ctdir/un.featureCounts.genes.raw.txt.summary
 fi
-
-#featureCounts -a $outdir/annotations.unique_exons.gtf -o $outdir/counts/bg.featureCounts.exons.raw.txt \
-#		-t exon -g gene_id -f -s $stranded -p -C -O -M -T $threads \
-#		$outdir/*/end2end_pre-align.bam > $outdir/counts/log_featureCounts.bg.exons.txt 2>&1
-
 
 #
 # 4) CURATE GENE ANNOTATIONS

@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-sloppr_version <- "1.1.2"
+sloppr_version <- "1.1.3"
 
 # this script is designed to predict operons from a featureCount matrix
 
@@ -28,9 +28,9 @@ library("glmpca")
 #				11) output directory
 
 args = commandArgs(trailingOnly=TRUE)
-#args <- c("sloppr_toy_data/2-counts/SL.featureCounts.genes.clean.txt", 
-#			"SL.fasta", 
-#			"SL2.txt", 
+#args <- c("Visch_C74_sloppr/2-counts/SL.featureCounts.genes.clean.txt", 
+#			"C74_SL.fa", 
+#			"", 
 #		"infinity", 
 #			"no",
 #			"infinity",
@@ -186,7 +186,7 @@ sl_clusters <- function(dd){
   meta <- meta[keep,]
 
   # MDS/K-means/LDA
-  
+  # catch error here
   gpca <- glmpca(cts[rowSums(cts)>0,,drop=F],2,fam="nb")
   names(gpca$factors) <- c("X1", "X2")
   
@@ -453,7 +453,10 @@ invisible(dev.off())
 
 # operons
 inferOperons <- function(cts, cutoff=Inf){
+	# set cutoff to maximum intergenic distance to enable comparisons with Infinity
+	if(cutoff==Inf) cutoff <- max(cts$Distance, na.rm=T)
 	cts$Status <- rep("not trans-spliced", times=nrow(cts))
+	cts$Quality <- "pass"
 	cts$Operon <- rep(NA, times=nrow(cts))
 	cts <- mclapply(split(cts, interaction(cts$Chr, cts$Strand), drop=T), function(chrs){
 		# find runs of downstream genes on each chromosome and strand
@@ -473,8 +476,8 @@ inferOperons <- function(cts, cutoff=Inf){
 		# if intergenic distance constraints have been provided, correct false positive downstream genes
 		# in this case, operons have to have at least two genes (2xdown or 1up+1down)
 		# classify downstream genes as monocistronic if distance is > cutoff or NA (final gene on contig) ...
-		d <- which(chrs$Status=="downstream" & (chrs$Distance>cutoff | is.na(chrs$Distance)))
 		# ...AND distance of previous gene is also > cutoff (to avoid last downstream genes in operons being removed)
+		d <- which(chrs$Status=="downstream" & (chrs$Distance>cutoff | is.na(chrs$Distance)))
 		m <- d[c(Inf, chrs$Distance)[d]>cutoff]
 		chrs$Status[m] <- "monocistronic"
 
@@ -485,6 +488,7 @@ inferOperons <- function(cts, cutoff=Inf){
 		chrs$Status[m] <- "monocistronic"
 
 		# need to break apart runs of downstream genes that are multiple operons back to back
+		# this only happens when upstream genes must have SL2 bias. Otherwise, the runs are broken up by upstream genes anyway.
 		d <- which(chrs$Status=="downstream" & chrs$Distance>cutoff)
 		b <- d[c(chrs$Status, "dummy")[d+1]=="downstream"]
 		b <- sort(c(1:nrow(chrs), b))
@@ -506,20 +510,32 @@ inferOperons <- function(cts, cutoff=Inf){
 		for(rn in which(rl$values=="downstream")){
 		  dstr.end <- sum(rl$lengths[0:rn])
 		  dstr.start <- dstr.end-(rl$lengths[rn]-1)
-		  first <- dstr.start
 		  # unbiased upstream gene is right before dstr.start (and must conform to distance constraint)
 		  if(upstream.bias=="no" & dstr.start>1) { 
 			# don't assign a dummy gene (from breaking multiple operons above) as upstream!!!
 			if(chrs$Distance[dstr.start-1]<=cutoff & chrs$Status[dstr.start-1]!="dummy") {
 				# assign previous gene as upstream
 				first <- dstr.start-1
-				chrs$Status[chrs$Geneid==chrs$Geneid[first]] <- "upstream"
-			} 
+			} else {
+				# need an upstream gene, but none available
+				# so, designate first downstream gene as upstream
+				first <- dstr.start
+				# designate gene quality as "adhoc"
+				chrs$Quality[chrs$Geneid==chrs$Geneid[first]] <- "adhoc"
+			}
 		  } else if(upstream.bias=="yes") {
 		    # upstream gene requires SL2 bias
 			# so, designate first downstream gene as upstream
-			chrs$Status[chrs$Geneid==chrs$Geneid[first]] <- "upstream"
+			first <- dstr.start
+		  } else {
+			# need an upstream gene, but none available
+			# so, designate first downstream gene as upstream
+			first <- dstr.start
+			# designate gene quality as "adhoc"
+			chrs$Quality[chrs$Geneid==chrs$Geneid[first]] <- "adhoc"
 		  }
+		  chrs$Status[chrs$Geneid==chrs$Geneid[first]] <- "upstream"
+		  # provisional operon ID
 		  op.id <- paste0("predicted:Operon_", chrs$Chr[1], "-", chrs$Start[first],
 						"-", chrs$End[dstr.end],
 						 "(", chrs$Strand[1], ")")
@@ -535,7 +551,7 @@ inferOperons <- function(cts, cutoff=Inf){
 	cts <- subset(cts, Status != "dummy")
 	cts$Status <- factor(cts$Status, levels=c("upstream", "downstream", "monocistronic", "not trans-spliced"))
 	
-	# replace operon ID with proper ID
+	# replace provisional operon ID with proper ID
 	cts <- cts[order(cts$Chr, cts$Start),]
 	op.id <- cts$Operon[!is.na(cts$Operon)]
 	op.id <- factor(op.id, levels=unique(op.id))
@@ -640,8 +656,8 @@ sz <- Reduce(function(x,y) merge(x = x, y = y, by="Var1", all=T), sz)
 sz <- sz[order(as.numeric(as.character(sz$Var1))),]
 rownames(sz) <- paste0("n=", sz[,1])
 sz <- t(sz[,-1])
-n.ops <- t(sapply(cts.op, function(x) { c(sum(table(x$Operon)), length(unique(na.exclude(x$Operon)))) }))
-colnames(n.ops) <- c("Genes", "Operons")
+n.ops <- t(sapply(cts.op, function(x) { c(sum(table(x$Operon)), sum(x$Quality=="adhoc"), length(unique(na.exclude(x$Operon)))) }))
+colnames(n.ops) <- c("operonic", "adhoc", "operons")
 rownames(n.ops) <- c("SL2", "Cluster1", "Cluster2")
 
 cat("Predicted operonic genes, operons and operon sizes (n = genes in operon):\n")
@@ -672,11 +688,13 @@ write.gff3 <- function(pref){
 		opid <- unique(operons[[i]]$Operon) #opid <- paste0(op.prefix, i)     # operon name
 		strand <- unique(operons[[i]]$Strand)[1]
 		opg <- nrow(operons[[i]])
+		op.qual <- ifelse(any(operons[[i]]$Quality=="adhoc"), "provisional", "pass")
 		gff.1 <- paste(operons[[i]]$Chr[1], ".", "operon", 
 				  min(operons[[i]]$Start), max(operons[[i]]$End), ".", operons[[i]]$Strand[1], ".", 
-				  paste("ID=", opid, ";Name=", opid, 
-						";size=", nrow(operons[[i]]), 
-						";genes=", paste(operons[[i]]$Geneid, collapse=","), sep=""), sep="\t")
+				  paste0("ID=", opid, ";Name=", opid, ";Note=", 
+						"size:", nrow(operons[[i]]), 
+						", genes:", paste(operons[[i]]$Geneid, collapse=","), 
+						", quality:", op.qual), sep="\t")
 		gff.2 <- sapply(1:opg, function(g){
 		  opgene <- operons[[i]][g,]
 		  gid <- paste(opid, ".", ifelse(strand=="+", g, opg+1-g), sep="")
@@ -690,7 +708,7 @@ write.gff3 <- function(pref){
 					  ", SL2:", round(opgene[,grep(pref, colnames(dd))], 2),
 					  ", SL2:SL1-ratio:", opgene[,"Ratio"], 
 					  ", intercistronic distance:", opgene[,"Distance"],
-					  ", ", opgene[,"Status"], " in operon")
+					  ", ", opgene[,"Status"], " in operon", ", quality:", opgene[,"Quality"])
 				, sep="\t")
 		})
 		c(gff.1, gff.2)

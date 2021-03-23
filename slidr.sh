@@ -9,21 +9,20 @@ function load_dependencies {
 	# ensure that all dependencies are in PATH
 	# MODIFY/DELETE THESE CALLS ACCORDING TO YOUR MACHINE
 	echo -e "#\n$(timestamp) >>> Loading dependencies"
-	export PATH="$PATH:/uoa/home/s02mw5/sharedscratch/apps/ViennaRNA-2.4.14/bin"
-	export PATH=$PATH:/uoa/home/s02mw5/sharedscratch/slidr/toy/vsearch-2.15.1/bin/
+	export PATH="$PATH:~/sharedscratch/apps/ViennaRNA-2.4.14/bin"
+	export PATH=$PATH:~/sharedscratch/slidr/toy/vsearch-2.15.1/bin/
 	module load hisat2-2.1.0
 	module load samtools-1.9
 	module load bedtools-2.28.0
 	module load seqtk-1.3
 	module load blast-2.9.0
 	module load r-data.table
-	module load r-3.6.1
 	module load gffread-0.11.4
 	module load cutadapt-2.3
 	module load bowtie2-2.3.5
 }
 
-title="#\n# SLIDR - Spliced Leader IDentification from RNA-Seq data\n# Version 1.1.3\n#"
+title="#\n# SLIDR - Spliced Leader IDentification from RNA-Seq data\n# Version 1.1.4\n#"
 
 function printhelp {
 	echo -e "$title"
@@ -37,12 +36,12 @@ function printhelp {
 	echo -e '#    -T <num>\tTEMP directory (default: $TMPDIR)'
 	echo -e '#    -h\t\tPrint this help page'
 	echo -e "#\n# Reference assembly:"
-	echo -e '#    -g <file>\tPath to genome assembly (FASTA[.GZ])'
-	echo -e '#    -a <file>\tPath to genome annotations (GFF/GTF[.GZ])'
-	echo -e '#    -t <file>\tPath to transcriptome assembly (FASTA[.GZ])'
+	echo -e '#    -g <file>\tPath to genome assembly (FASTA[.gz])'
+	echo -e '#    -a <file>\tPath to genome annotations (GFF/GTF[.gz])'
+	echo -e '#    -t <file>\tPath to transcriptome assembly (FASTA[.gz])'
 	echo -e "#\n# Single RNA-Seq library:"
-	echo -e '#    -1 <file>\tPath to R1 reads (FASTQ.GZ)'
-	echo -e '#    -2 <file>\tPath to R2 reads (FASTQ.GZ)'
+	echo -e '#    -1 <file>\tPath to R1 reads (FASTQ[.gz])'
+	echo -e '#    -2 <file>\tPath to R2 reads (FASTQ[.gz])'
 	echo -e '#    -b <file>\tPath to read alignments (BAM)'
 	echo -e '#    -r <num>\tRead strandedness (0=unstranded; 1=stranded; 2=reverse-stranded; x=infer; default: x)'
 	echo -e "#    -q\t\tQuality-trim 3' ends of reads and remove Illumina adapters"
@@ -330,16 +329,20 @@ ref=$outdir/reference.fa
 if [ ! "$ann" == "" ]; then
 	gtf="$outdir/annotations.gtf"
 	if [ ! -f $gtf ]; then
-		echo "$(timestamp) Fetching annotations ..."
+		echo "$(timestamp) Processing annotations ..."
 		gropts="--force-exons --gene2exon --keep-genes -M -K -Q -C -T"
 		fform="$(file $ann)"
 		if [[ "$fform" =~ "gzip" ]] && [[ "$fform" =~ ".gtf" ]]; then
+			# gzipped GTF
 			gunzip -c $ann > $gtf
 		elif [[ "$fform" =~ "gzip" ]] && [[ ! "$fform" =~ ".gtf" ]]; then
+			# gzipped GFF
 			gunzip -c $ann | gffread $gropts -o $gtf
 		elif [[ ! "$fform" =~ "gzip" ]] && [[ "$fform" =~ ".gtf" ]]; then
+			# unzipped GTF
 			cp $ann $gtf
 		else
+			# unzipped GFF
 			gffread $ann $gropts -o $gtf
 		fi
 	fi
@@ -446,32 +449,40 @@ function transcriptome_align {
 function infer_strandedness {
 	if [[ ! "$stranded" =~ [012] ]]; then
 		# infer strandedness if annotations are available
+		# otherwise, strandedness must be 0
 		if [ "$ann" == "" ]; then
 			stranded=0
 		else
-			# + strand
-			gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="+"' $ann \
-				| bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 100 -i -)
-			pR1=$(echo "$gtfsample" | samtools view -c -F 20 -f 64 -M -L - $bam)
-			pR2=$(echo "$gtfsample" | samtools view -c -F 20 -f 128 -M -L - $bam)
-
-			# - strand
-			gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="-"' $ann \
-				| bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 100 -i -)
-			mR1=$(echo "$gtfsample" | samtools view -c -F 4 -f 80 -M -L - $bam)
-			mR2=$(echo "$gtfsample" | samtools view -c -F 4 -f 144 -M -L - $bam)
-
-			# summarise
-			R1=$((pR1+mR1))
-			R2=$((pR2+mR2))
-			if [ $((R1+R2)) == 0 ]; then
-				# single-end data; must be analysed as unstranded
+			# check if we have single-end reads:
+			# if so, must treat like unstranded data
+			npe=$({ samtools view -H $bam ; samtools view $bam | head -n 10000; } | samtools view -c -f 1 -)
+			if [ "$npe" == "0" ]; then
 				stranded=0
 			else
-				# need at least 40:60 bias to infer as stranded
-				sR1=$((100*R1/(R1+R2)))
-				sR2=$((100*R2/(R1+R2)))
-				stranded=$(( 1 + 2*(sR1<40) - (sR1<60)))
+				# + strand
+				gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="+"' $ann \
+					| bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 1000 -i -)
+				pR1=$(echo "$gtfsample" | samtools view -c -F 20 -f 64 -M -L - $bam)
+				pR2=$(echo "$gtfsample" | samtools view -c -F 20 -f 128 -M -L - $bam)
+
+				# - strand
+				gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="-"' $ann \
+					| bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 1000 -i -)
+				mR1=$(echo "$gtfsample" | samtools view -c -F 4 -f 80 -M -L - $bam)
+				mR2=$(echo "$gtfsample" | samtools view -c -F 4 -f 144 -M -L - $bam)
+
+				# summarise
+				R1=$((pR1+mR1))
+				R2=$((pR2+mR2))
+				if [ $((R1+R2)) == 0 ]; then
+					# double-check for single-end data; must be analysed as unstranded
+					stranded=0
+				else
+					# need at least 30:70 bias to infer as stranded
+					sR1=$((100*R1/(R1+R2)))
+					sR2=$((100*R2/(R1+R2)))
+					stranded=$(( 1 + 2*(sR1<=30) - (sR1<=70)))
+				fi
 			fi
 		fi
 		echo "$(timestamp) Inferred library strandedness: $stranded"
@@ -479,7 +490,7 @@ function infer_strandedness {
 }
 
 function tail_extract {
-	### rev-stranded data (-s 2):	R2 are from 5' end of transcript
+	### rev-stranded data (-r 2):	R2 are from 5' end of transcript
 	###								R1 are only useful if the fragment is short;
 	###								the 3' end of R1 can then read into the rev compl of the SL
 	#
@@ -488,13 +499,13 @@ function tail_extract {
 	# mapped to + strand: -F 20			R1: -f 64		take 3' tail from read (rev compl) (90M10S)
 	# mapped to - strand: -F 4 -f 16	R1: -f 64		take 3' tail from read (10S90M)
 
-	### fwd-stranded data (-s 1):	As above, but swap R1 and R2
+	### fwd-stranded data (-r 1):	As above, but swap R1 and R2
 
-	### unstranded data (-s 0): 	No distinction between R1 and R2
+	### unstranded data (-r 0): 	No distinction between R1 and R2
 	#
 	# mapped to + strand: -F 20			take 5' tail from read (10S90M)
-	# mapped to - strand: -F 4 -f 16	take 5' tail from read (rev compl) (90MS10)
-	# mapped to + strand: -F 20			take 3' tail from read (rev compl) (90MS10)
+	# mapped to - strand: -F 4 -f 16	take 5' tail from read (rev compl) (90M10S)
+	# mapped to + strand: -F 20			take 3' tail from read (rev compl) (90M10S)
 	# mapped to - strand: -F 4 -f 16	take 3' tail from read (10S90M)
 	
 	# we want to keep secondary alignments
@@ -503,13 +514,6 @@ function tail_extract {
 	# -F 260 instead of -F 4
 	
 	echo "$(timestamp) Extracting soft-clipped tails from alignments ..."
-
-	# check if we have single-end reads:
-	# if so, must treat like unstranded data
-	npe=$({ samtools view -H $bam ; samtools view $bam | head -n 10000; } | samtools view -c -f 1 -)
-	if [ "$npe" == "0" ]; then
-		stranded=0
-	fi
 
 	{ if [ ! -f "$bam.tails+5p.fa.gz" ]; then
 		samtools view -H $bam > "$bam.tails+5p.sam"
@@ -548,7 +552,7 @@ function tail_extract {
 			| seqtk seq -U > "$bam.tails-3p.fa"
 		gzip $bam.tails-3p.sam
 		gzip $bam.tails-3p.fa
-	fi; } &&	
+	fi; } & wait	
 	echo "$(timestamp) Extracted $(zgrep -h '^>' $bam.tails*p.fa.gz | grep -c '^>') tails"
 }
 
@@ -610,9 +614,8 @@ if [ ! -f $tailprefix.derep.fa.gz ]; then
 		> $tailprefix.derep.log-vsearch.txt 2>&1
 
 	# clusterinfo; two columns: representative, read
-	# sort by representative to aid joining
 	awk '$1=="H"{print $10, $9}$1=="S"{print $9, $9}' OFS="\t" $tailprefix.derep.out.txt \
-		| sort -S90% --batch-size=100 -t "$(printf '\t')" -k1,1 \
+		| sort -S90% --batch-size=100 -t "$(printf '\t')" -k 1,1 \
 		| gzip > $tailprefix.derep.clusterinfo.txt.gz
 	gzip $tailprefix.derep.fa
 	gzip $tailprefix.derep.out.txt
@@ -681,7 +684,8 @@ fi
 blastprefix=$outdir/2-RNA_filters/centroids-x$tscale-l$tlength-$agc.blastn-e$evalue
 if [ ! -f $blastprefix.out.gz ]; then
 	gunzip -c $clusterprefix.centroids.fa.gz \
-		| blastn -db $outdir/blast_db/reference -query - -dust yes \
+		| dustmasker -in - -level 10 -outfmt fasta \
+		| blastn -db $outdir/blast_db/reference -query - \
 			-word_size 8 -num_threads $threads -perc_identity 100 -evalue $evalue \
 			-outfmt '6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore qseq qlen' \
 			2> $blastprefix.log_blastn.txt \
@@ -708,7 +712,7 @@ if [ ! -f "$smout" ]; then
 			$9>$10{print $2, ($10-2>0?$10-2:0), ($10-1>1?$10-1:1), $13"::"$1, ".", "-"}' OFS="\t" \
 	 | bedtools slop -g $outdir/reference.fa.fai -i - -s -l 0 -r $(($overlap+$rlength)) \
 	 | bedtools getfasta -name+ -tab -s -fi $outdir/reference.fa -bed - \
-	 | awk -F'\t|::' -v p="${donor}${sm}" -v l="$rlength" -v x="$overlap" \
+	 | awk --re-interval -F'\t|::' -v p="${donor}${sm}" -v l="$rlength" -v x="$overlap" \
 		'{  s=match(toupper($4), toupper(p)); o=toupper(substr($4, 1, s-1)); if(o==""){o=""}; gsub(":", "\t", $3); 
 			if(s>0 && s<=(x+1)){print $2, $3, $1, o, $1""o""substr(toupper($4),RSTART,RLENGTH+l)}}' OFS="\t" \
 		| sed 's/;size=[0-9]\+/\t&/g' | gzip > "$smout"
@@ -725,8 +729,8 @@ fi
 # we can find acceptor sites when we have a genome.
 # this won't work with a transcriptome, but we still need to collect read alignment locations.
 # filter by acceptor site motif.
-tailbams=$outdir/2-RNA_filters/alignments-x$tscale
-spliceout=$tailbams.spliceacceptor-$acceptor-O$overlap.txt.gz
+tailbams="$outdir/2-RNA_filters/alignments-x$tscale"
+spliceout="$tailbams.spliceacceptor-$acceptor-O$overlap.txt.gz"
 if [ ! -f "$spliceout" ]; then
 	echo "$(timestamp) Extracting splice acceptor sites ($acceptor) ..."
 	
@@ -770,9 +774,11 @@ if [ ! -f "$spliceout" ]; then
 	cat $tailbams.tails*.bed \
 		| bedtools slop -g $outdir/reference.fa.fai -i - -s -l $acclen -r $overlap \
 		| bedtools getfasta -fi $outdir/reference.fa -bed - -s -tab -name+ \
-		| awk -F'\t|::' -v a="$acceptor" 'toupper($3)~toupper(a){gsub(":", "\t", $2); 
-				gsub("/[12]$", "", $1); print $1, $2, toupper($3)}' OFS="\t" \
-		| gzip > $spliceout
+		| awk -F'\t|::' -v a="$acceptor" 'toupper($3)~toupper(a){
+				gsub(":", "\t", $2); 
+				gsub("/[12]$", "", $1); print $1, $2, toupper($3)
+			}' OFS="\t" \
+		| gzip > "$spliceout"
 	
 	rm $tailbams.tails*.bed
 	
@@ -812,14 +818,14 @@ echo "$(timestamp) Processed $ud unique RNAs"
 echo "$(timestamp) >>> STAGE 3: Consensus SL construction"
 
 # new: cluster directly from slRNA output. No need to go through all the joining trouble.
-if [ ! -f $smout.centroids.fa.gz ]; then
+if [ ! -f "$smout.centroids.fa.gz" ]; then
 	echo "$(timestamp) Re-clustering SL candidates ..."
-	gunzip -c $smout | awk -F'\t' '{print ">"$1"::"$5"::"$6$2"::nl::"$5$6}'  \
-		| sort -S90% -t "$(printf '\t')" | uniq | sed 's/::nl::/\n/g' | gzip > $smout.SLtails.fa.gz
-	gunzip -c $smout.SLtails.fa.gz \
+	gunzip -c "$smout" | awk -F'\t' '{print ">"$1"::"$5"::"$6$2"::nl::"$5$6}'  \
+		| sort -S90% -t "$(printf '\t')" | uniq | sed 's/::nl::/\n/g' | gzip > "$smout.SLtails.fa.gz"
+	gunzip -c "$smout.SLtails.fa.gz" \
 	| vsearch --cluster_fast - --qmask none \
-		--uc $smout.clusters.out --centroids $smout.centroids.fa \
-		--msaout $smout.msa.fa \
+		--uc "$smout.clusters.out" --centroids "$smout.centroids.fa" \
+		--msaout "$smout.msa.fa" \
 		--id 1.0 --iddef 0 --rightjust \
 		--clusterout_sort --sizein --sizeout \
 		--minseqlength $tlength --threads $threads \
@@ -827,11 +833,11 @@ if [ ! -f $smout.centroids.fa.gz ]; then
 		--sizeorder --maxaccepts 0 --maxrejects 0 \
 		> "$smout.log_vsearch-cluster.txt" 2>&1
 		
-	awk -F'::|\t' '$1~"S|H"{print $2, $9, $10, $11}' OFS="\t" $smout.clusters.out \
-		| sed 's/;size=[0-9]\+//g' | gzip > $smout.clusterinfo.txt.gz
-	gzip $smout.clusters.out
-	gzip $smout.centroids.fa
-	gzip $smout.msa.fa
+	awk -F'::|\t' '$1~"S|H"{print $2, $9, $10, $11}' OFS="\t" "$smout.clusters.out" \
+		| sed 's/;size=[0-9]\+//g' | gzip > "$smout.clusterinfo.txt.gz"
+	gzip "$smout.clusters.out"
+	gzip "$smout.centroids.fa"
+	gzip "$smout.msa.fa"
 fi
 nc=$(grep -o "Clusters: [0-9]*" $smout.log_vsearch-cluster.txt | grep -o "[0-9]*")
 echo "$(timestamp) Generated $nc clusters"
@@ -839,24 +845,23 @@ echo "$(timestamp) Generated $nc clusters"
 #
 # 10) final filtering and consensus construction in R
 #
-echo "$(timestamp) Constructing final consensus SLs ..."
-resultsdir=$outdir/3-results-x$tscale-l$tlength-$agc-e$evalue-R$rlength-D$donor-S$sm-L$sloop-A$acceptor-O$overlap
-mkdir -p $resultsdir
+echo "$(timestamp) Resolving consensus SLs ..."
+resultsdir="$outdir/3-results-x$tscale-l$tlength-$agc-e$evalue-R$rlength-D$donor-S$sm-L$sloop-A$acceptor-O$overlap"
+mkdir -p "$resultsdir"
 # deposit file of input file names
 # read info
-echo "$clusterprefix.readinfo.txt.gz" > $resultsdir/filters.fofn
+echo "$clusterprefix.readinfo.txt.gz" > "$resultsdir/filters.fofn"
 # acceptor info
-echo "$spliceout" >> $resultsdir/filters.fofn
+echo "$spliceout" >> "$resultsdir/filters.fofn"
 # donor info
-echo "$smout" >> $resultsdir/filters.fofn
+echo "$smout" >> "$resultsdir/filters.fofn"
 # RNAfold info
-echo "$rnafout" >> $resultsdir/filters.fofn
+echo "$rnafout" >> "$resultsdir/filters.fofn"
 # SL tail clusterinfo
-echo "$smout.clusterinfo.txt.gz" >> $resultsdir/filters.fofn 
+echo "$smout.clusterinfo.txt.gz" >> "$resultsdir/filters.fofn"
 
 slidr_consensus.R "$resultsdir" " $acceptor" $slprefix $threads
 
 echo "$(timestamp) Finished!"
-
 
 exit 0
