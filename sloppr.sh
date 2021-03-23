@@ -459,13 +459,13 @@ function quantify_background {
 			$bam > $outdir/$lib/log_featureCounts.bg.txt 2>&1
 	fi
 	
-	# quantify untrimmed candidate reads (not end2end and no SL)
+	# quantify unsuccessful candidate reads (not end2end and no SL)
 	# due to the pseudo-stranding done during candidate read extraction, strandedness is 1 (or 0 for unstranded data)
-	if [ ! -f $outdir/$lib/untrimmed.bam.txt ]; then
-		echo "$(timestamp) Quantifying untrimmed reads ..."	
-		featureCounts -a $ann -o $outdir/$lib/untrimmed.bam.txt \
+	if [ ! -f $outdir/$lib/unsuccessful.bam.txt ]; then
+		echo "$(timestamp) Quantifying unsuccessful reads ..."	
+		featureCounts -a $ann -o $outdir/$lib/unsuccessful.bam.txt \
 			-t $featureid -g $metafeatureid -s $(($stranded>0)) $fcpaired -C -O -M -T $threads \
-			$outdir/$lib/untrimmed.bam > $outdir/$lib/log_featureCounts.untrimmed.txt 2>&1
+			$outdir/$lib/unsuccessful.bam > $outdir/$lib/log_featureCounts.unsuccessful.txt 2>&1
 	fi
 }
 
@@ -511,14 +511,14 @@ function sl_screen {
 			  seqtk seq $outdir/$lib/SL.candidates.fastq.gz; } \
 				| cutadapt -g file:$sls \
 				-O $slength -e $err -m 15 \
-				--untrimmed-output $outdir/$lib/untrimmed.5p.fastq.gz \
+				--untrimmed-output $outdir/$lib/unsuccessful.5p.fastq.gz \
 				-o $outdir/$lib/{name}.5p.fastq.gz - > $outdir/$lib/log_SL.cutadapt.txt 2>&1
 		else
 			# PE
 			cutadapt -g file:$sls \
 				-O $slength -e $err -m 15 \
-				--untrimmed-output $outdir/$lib/untrimmed.5p.fastq.gz \
-				--untrimmed-paired-output $outdir/$lib/untrimmed.mates.fastq.gz \
+				--untrimmed-output $outdir/$lib/unsuccessful.5p.fastq.gz \
+				--untrimmed-paired-output $outdir/$lib/unsuccessful.mates.fastq.gz \
 				-o $outdir/$lib/{name}.5p.fastq.gz \
 				-p $outdir/$lib/{name}.mates.fastq.gz \
 				$outdir/$lib/SL.candidates.fastq.gz \
@@ -530,8 +530,8 @@ function sl_screen {
 }
 
 function sl_realign {
-	# align SL reads (and untrimmed reads) back to the genome
-	for SL in $(grep "^>" $sls | tr -d ">") untrimmed
+	# align SL reads (and unsuccessful reads) back to the genome
+	for SL in $(grep "^>" $sls | tr -d ">") unsuccessful
 	do
 		if [ ! -f $outdir/$lib/$SL*.bam ]; then
 			# SE or PE data
@@ -541,9 +541,9 @@ function sl_realign {
 			else
 				hisat_options+="-1 $outdir/$lib/$SL.5p.fastq.gz -2 $outdir/$lib/$SL.mates.fastq.gz"
 			fi
-			# untrimmed or SL
-			if [ "$SL" == "untrimmed" ]; then
-				# untrimmed reads are allowed softclipping
+			# unsuccessful or SL
+			if [ "$SL" == "unsuccessful" ]; then
+				# unsuccessful reads are allowed softclipping
 				# keep mates if we have PE data
 				suff=""
 				echo "$(timestamp) Aligning $SL reads ..."
@@ -669,14 +669,14 @@ if [ ! -f $ctdir/bg.featureCounts.genes.raw.txt ]; then
 fi
 if [ ! -f $ctdir/un.featureCounts.genes.raw.txt ]; then
 	# paste 7th column for all background count files
-	fcbg=($outdir/*/untrimmed.bam.txt)
+	fcbg=($outdir/*/unsuccessful.bam.txt)
 	x=$(for a in ${fcbg[@]}
 		do
 			echo "<(tail -n +2 $a | cut -f 7)"
 		done | paste -s -d ' ')
 	eval "paste <(tail -n +2 $fcbg | cut -f 1-6) $x" > $ctdir/un.featureCounts.genes.raw.txt
 	# also grab all summary files
-	fcbg=($outdir/*/untrimmed.bam.txt.summary)
+	fcbg=($outdir/*/unsuccessful.bam.txt.summary)
 	x=$(for a in ${fcbg[@]}
 		do
 			echo "<(cut -f 2 $a)"
@@ -726,6 +726,7 @@ mkdir -p $opdir
 #
 if [ ! "$refops" == "" ]; then 
 	#grep "operon" $ann > $outdir/annotations.operons.gff3
+	echo "$(timestamp) Comparing predictions against reference operons ..."
 	for gff in $opdir/*.gff3
 	do
 		echo "Comparing reference operons against $gff ..."

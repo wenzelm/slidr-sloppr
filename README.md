@@ -2,7 +2,7 @@
 
 SLIDR and SLOPPR identify spliced leaders (SLs) from 5'-tails of RNA-Seq reads that are soft-clipped after read alignment to a reference genome or transcriptome. SLIDR (Spliced leader identification from RNA-Seq data) assembles these read tails into full-length SLs and functional SL RNA genes. SLOPPR (Spliced leader-informed operon prediction from RNA-Seq data) searches read tails for a set of known SLs, quantifies SL-containing reads against all genes in the genome and uses SL usage patterns across genes to predict operons. SLOPPR can incorporate known SL specialisation for resolving downstream operonic genes (e.g., SL1/SL2-type SLs in nematodes), infer such specialisation *de novo*, or handle scenarios without SL specialisation.
 
-Full descriptions of the implementation are detailed in the preprint published at bioRxiv: [https://doi.org/10.1101/2020.12.23.423594](https://doi.org/10.1101/2020.12.23.423594)
+Full descriptions of the implementation are detailed in the BMC Bioinformatics article: [https://doi.org/10.1186/s12859-021-04009-7](https://doi.org/10.1186/s12859-021-04009-7)
 
 **Table of contents**
 
@@ -365,7 +365,7 @@ Genome-aligned SL reads (BAM format) merged from all libraries are written to th
 Read quantification results against gene annotations are written to the subdirectory `2-counts`:
 
 - `bg.featureCounts.genes.*`: featureCounts results from initial end-to-end read alignments (background gene expression)
-- `un.featureCounts.genes.*`: featureCounts results from untrimmed candidate reads (background gene expression)
+- `un.featureCounts.genes.*`: featureCounts results from unsuccessful candidate reads (background gene expression)
 - `SL.featureCounts.genes.*`: featureCounts results from SL reads
 - `SL.featureCounts.exons.*`: featureCounts results from SL reads, quantified against curated gene annotations, where genes were split at internal exons receiving SL reads
 
