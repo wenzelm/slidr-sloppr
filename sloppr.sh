@@ -353,10 +353,10 @@ if [ ! -d $outdir/hisat2_index ]; then
 	# extract splice sites for hisat2
 	hisat2_extract_splice_sites.py $ann > $outdir/hisat2_index/hisat2_splicesites.txt
 	hisat2_extract_exons.py $ann > $outdir/hisat2_index/hisat2_exons.txt
-	hisat2-build -p $threads \
-		--ss $outdir/hisat2_index/hisat2_splicesites.txt \
-		--exon $outdir/hisat2_index/hisat2_exons.txt \
-		$genome $outdir/hisat2_index/genome > $outdir/hisat2_index/log_hisat2-build.txt 2>&1
+	if [ -s $outdir/hisat2_index/hisat2_splicesites.txt ] && [ -s $outdir/hisat2_index/hisat2_exons.txt ]; then
+		hisatgffopts+="--ss $outdir/hisat2_index/hisat2_splicesites.txt --exon $outdir/hisat2_index/hisat2_exons.txt"
+	fi
+	hisat2-build -p $threads $hisatgffopts $genome $outdir/hisat2_index/genome > $outdir/hisat2_index/log_hisat2-build.txt 2>&1
 fi
 
 #

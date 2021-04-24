@@ -358,8 +358,9 @@ if [ ! "$genome" == "" ] && [ ! -d $outdir/hisat2_index ]; then
 		# extract splice sites for hisat2
 		hisat2_extract_splice_sites.py $ann > $outdir/hisat2_index/hisat2_splicesites.txt
 		hisat2_extract_exons.py $ann > $outdir/hisat2_index/hisat2_exons.txt
-		hisatgffopts="--ss $outdir/hisat2_index/hisat2_splicesites.txt
-				--exon $outdir/hisat2_index/hisat2_exons.txt"
+		if [ -s $outdir/hisat2_index/hisat2_splicesites.txt ] && [ -s $outdir/hisat2_index/hisat2_exons.txt ]; then
+			hisatgffopts+="--ss $outdir/hisat2_index/hisat2_splicesites.txt --exon $outdir/hisat2_index/hisat2_exons.txt"
+		fi
 	fi
 	hisat2-build -p $threads $hisatgffopts $ref $outdir/hisat2_index/genome \
 		> $outdir/hisat2_index/log_hisat2-build.txt 2>&1
@@ -684,9 +685,9 @@ fi
 blastprefix=$outdir/2-RNA_filters/centroids-x$tscale-l$tlength-$agc.blastn-e$evalue
 if [ ! -f $blastprefix.out.gz ]; then
 	gunzip -c $clusterprefix.centroids.fa.gz \
-		| dustmasker -in - -level 10 -outfmt fasta \
+		| dustmasker -in - -level 10 -window 10 -outfmt fasta \
 		| blastn -db $outdir/blast_db/reference -query - \
-			-word_size 8 -num_threads $threads -perc_identity 100 -evalue $evalue \
+			-word_size 8 -num_threads $threads -perc_identity 100 -lcase_masking -evalue $evalue \
 			-outfmt '6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore qseq qlen' \
 			2> $blastprefix.log_blastn.txt \
 			| awk '$8==$14' > $blastprefix.out
@@ -747,29 +748,26 @@ if [ ! -f "$spliceout" ]; then
 	{ if [ ! -f "$tailbams.tails+3p.bam" ]; then
 		samtools merge -f -@ $threads -O bam $tailbams.tails+3p.bam $outdir/1-library_*/*x$tscale.bam.tails+3p.sam.gz
 	fi; } & wait
-	
+		
 	# length of acceptor site (AG: 2bp)
 	# if regex is used, try and work out how many characters using bracket pairs
 	# e.g., G[TA][AC] would be three characters
 	acclen=$(($(echo "$acceptor" | sed 's/\[[^][]*\]/./g' | wc -m)-1))
-	
+		
 	# collect acceptor regions and filter by acceptor site
 	# only use reads that were clustered (shorter reads than $tlength were dropped)
 	#readids=$(zless $outdir/1-tails/tails.derep.clusterinfo.txt.gz | cut -f 2)
-	clinfo=$tailprefix.derep.clusterinfo.txt.gz
-
-	bedtools bamtobed -i $tailbams.tails+5p.bam \
-		| grep -Fw -f <(gunzip -c $clinfo | cut -f 2) - \
-		| awk '{$3=$2+1; print}' OFS="\t" > $tailbams.tails+5p.bed &
-	bedtools bamtobed -i $tailbams.tails-3p.bam \
-		| grep -Fw -f <(gunzip -c $clinfo | cut -f 2) - \
-		| awk '{$3=$2+1; $6="+"; print}' OFS="\t" > $tailbams.tails-3p.bed &
-	bedtools bamtobed -i $tailbams.tails-5p.bam \
-		| grep -Fw -f <(gunzip -c $clinfo | cut -f 2) - \
-		| awk '{$2=$3-1; print}' OFS="\t" > $tailbams.tails-5p.bed &
-	bedtools bamtobed -i $tailbams.tails+3p.bam \
-		| grep -Fw -f <(gunzip -c $clinfo | cut -f 2) - \
-		| awk '{$2=$3-1; $6="-"; print}' OFS="\t" > $tailbams.tails+3p.bed & wait
+	#clinfo="$tailprefix.derep.clusterinfo.txt.gz"
+	#gunzip -c $clinfo | cut -f 2 > $tailbams.reads.tmp
+	
+	{ bedtools bamtobed -i $tailbams.tails+5p.bam \
+		| awk '{$3=$2+1; print}' OFS="\t" > $tailbams.tails+5p.bed; } &
+	{ bedtools bamtobed -i $tailbams.tails-3p.bam \
+		| awk '{$3=$2+1; $6="+"; print}' OFS="\t" > $tailbams.tails-3p.bed; } &
+	{ bedtools bamtobed -i $tailbams.tails-5p.bam \
+		| awk '{$2=$3-1; print}' OFS="\t" > $tailbams.tails-5p.bed; } &
+	{ bedtools bamtobed -i $tailbams.tails+3p.bam \
+		| awk '{$2=$3-1; $6="-"; print}' OFS="\t" > $tailbams.tails+3p.bed; } & wait
 	
 	cat $tailbams.tails*.bed \
 		| bedtools slop -g $outdir/reference.fa.fai -i - -s -l $acclen -r $overlap \
@@ -781,6 +779,7 @@ if [ ! -f "$spliceout" ]; then
 		| gzip > "$spliceout"
 	
 	rm $tailbams.tails*.bed
+	#rm $tailbams.reads.tmp
 	
 	nas=$(gunzip -c $spliceout | wc -l)
 	echo "$(timestamp) Extracted $nas splice acceptor sites"
