@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-sloppr_version <- "1.1.3"
+sloppr_version <- "1.1.4"
 
 # this script is designed to predict operons from a featureCount matrix
 
@@ -106,7 +106,7 @@ readFC <- function(f){
   for(s in sl) meta$Library <- gsub(paste0(".", s, "$"), "", meta$Library)
   # resolve SL names
   meta$SL <- rep("", times=nrow(meta))
-  for(s in sl) meta$SL[grep(s, meta$ID)] <- s
+  for(s in sl) meta$SL[grep(paste0(s, "\\."), meta$ID)] <- s
   # add SL-types (if known)
   meta$SL.type <- "SL1"
   meta$SL.type[meta$SL %in% sl2] <- "SL2"

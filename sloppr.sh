@@ -19,7 +19,7 @@ function load_dependencies {
 	module load subread-1.6.2
 }
 
-title="#\n# SLOPPR - Spliced-Leader-informed Operon Prediction from RNA-Seq data\n# Version 1.1.3\n#"
+title="#\n# SLOPPR - Spliced-Leader-informed Operon Prediction from RNA-Seq data\n# Version 1.1.4\n#"
 
 function printhelp {
 	echo -e "$title"
@@ -533,7 +533,7 @@ function sl_realign {
 	# align SL reads (and unsuccessful reads) back to the genome
 	for SL in $(grep "^>" $sls | tr -d ">") unsuccessful
 	do
-		if [ ! -f $outdir/$lib/$SL*.bam ]; then
+		if [ ! -f $outdir/$lib/$SL.*bam ]; then
 			# SE or PE data
 			hisat_options=""
 			if [ "$npe" == "0" ]; then

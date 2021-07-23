@@ -591,6 +591,9 @@ Future updates may support more efficient data structures and automatic HPC job 
 <a name="updates"></a>
 # Update log
 
+## 23/07/2021
+SLOPPR 1.1.4: fixed an error and a silent bug triggered in some circumstances by SL names that are contained in other SL names
+
 ## 23/03/2021
 - SLIDR 1.1.4: fixed compatibility issue with awk version <4.0; added dustmasking to tails to reduce computational burden of repetitive tails; reduced R memory usage for highly repetitive data; re-tuned strandedness inference (more conservative) 
 - SLOPPR 1.1.3: fixed bugs when using single-end data; added *quality* attribute to operon GFF to flag provisional operons with missing upstream genes
