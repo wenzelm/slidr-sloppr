@@ -407,13 +407,13 @@ function genome_align {
 }
 
 function infer_strandedness {
+	npe=$({ samtools view -H $bam ; samtools view $bam | head -n 10000; } | samtools view -c -f 1 -)
 	if [ -f $outbam.strandedness.txt ]; then
 		stranded=$(cat $outbam.strandedness.txt)
 	else
 		# check BAM to infer whether we have SE or PE reads
 		# if SE, must treat as unstranded data
 		# if PE, infer strandedness if requested
-		npe=$({ samtools view -H $bam ; samtools view $bam | head -n 10000; } | samtools view -c -f 1 -)	
 		if [ "$npe" == "0" ]; then
 			stranded=0
 		elif [[ ! "$stranded" =~ [012] ]]; then
@@ -531,7 +531,7 @@ function sl_realign {
 				# align mates (if available) to aid alignment,
 				# but remove them from the BAM file afterwards (we want to quantify the 5' end only)
 				suff=".fc"
-				nr=" $(grep -A 2 "$SL" $outdir/$lib/log_SL.cutadapt.txt | tail -n 1 | grep -o "[0-9]* times" | grep -o "[0-9]*")"
+				nr=" $(grep -Fw -A 2 "$SL" $outdir/$lib/log_SL.cutadapt.txt | tail -n 1 | grep -o "[0-9]* times" | grep -o "[0-9]*")"
 				echo "$(timestamp) Aligning$nr $SL reads ..."
 				hisat2 -x $outdir/hisat2_index/genome --no-softclip $hisat_options -p $threads 2> $outdir/$lib/log_$SL.hisat2.txt \
 					| samtools view -@ $threads -h -f $((64*($npe>0))) - 2>> $outdir/$lib/log_$SL.hisat2.txt \
