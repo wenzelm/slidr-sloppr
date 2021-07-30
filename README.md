@@ -591,25 +591,28 @@ Future updates may support more efficient data structures and automatic HPC job 
 <a name="updates"></a>
 # Update log
 
+## 30/07/2021
+new versions SLIDR 1.1.5 and SLOPPR 1.1.5: fixed errors when BAM files are specified as input files
+
 ## 23/07/2021
-SLOPPR 1.1.4: fixed an error and a silent bug triggered in some circumstances by SL names that are contained in other SL names
+new version SLOPPR 1.1.4: fixed an error and a silent bug triggered in some circumstances by SL names that are contained in other SL names
 
 ## 23/03/2021
-- SLIDR 1.1.4: fixed compatibility issue with awk version <4.0; added dustmasking to tails to reduce computational burden of repetitive tails; reduced R memory usage for highly repetitive data; re-tuned strandedness inference (more conservative) 
-- SLOPPR 1.1.3: fixed bugs when using single-end data; added *quality* attribute to operon GFF to flag provisional operons with missing upstream genes
+- new version SLIDR 1.1.4: fixed compatibility issue with awk version <4.0; added dustmasking to tails to reduce computational burden of repetitive tails; reduced R memory usage for highly repetitive data; re-tuned strandedness inference (more conservative) 
+- new version SLOPPR 1.1.3: fixed bugs when using single-end data; added *quality* attribute to operon GFF to flag provisional operons with missing upstream genes
 
 ## 19/02/2021
-- SLIDR 1.1.3: added option to choose distance-based or abundance-based greedy clustering (DGC, AGC); fixed out-of-memory errors with large datasets; added gzip support for genome/transcriptome and annotations
-- SLOPPR 1.1.2: improved gene-curation algorithm: now splits consecutive exons if reads are shorter than exon length; added gzip support for genome and annotations; fixed compatibility issue with SUBREAD 2.0.1; added TPM to output GFF
+- new version SLIDR 1.1.3: added option to choose distance-based or abundance-based greedy clustering (DGC, AGC); fixed out-of-memory errors with large datasets; added gzip support for genome/transcriptome and annotations
+- new version SLOPPR 1.1.2: improved gene-curation algorithm: now splits consecutive exons if reads are shorter than exon length; added gzip support for genome and annotations; fixed compatibility issue with SUBREAD 2.0.1; added TPM to output GFF
 
 ## 01/02/2021
 
-- SLOPPR 1.1.1: added -T and -f options; fixed bug when GFF/GTF contains no exons
-- SLIDR 1.1.2: added -T option
+- new version SLOPPR 1.1.1: added -T and -f options; fixed bug when GFF/GTF contains no exons
+- new version SLIDR 1.1.2: added -T option
 
 ## 26/01/2021
 
-- SLIDR 1.1.1: fixed poor read recovery when using outdated VSEARCH (recommend version 2.15.1); fixed clustering problems when read tails contained Ns.
+- new version SLIDR 1.1.1: fixed poor read recovery when using outdated VSEARCH (recommend version 2.15.1); fixed clustering problems when read tails contained Ns.
 
 <a name="citation"></a>
 # Citation

@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-sloppr_version <- "1.1.4"
+sloppr_version <- "1.1.5"
 
 # this script is designed to predict operons from a featureCount matrix
 

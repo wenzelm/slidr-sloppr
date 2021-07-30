@@ -389,8 +389,7 @@ function trim_reads {
 }
 
 function genome_align {
-	bam="$outdir/$lib/end2end_pre-align.bam"
-	if [ ! -f $bam ]; then
+	if [ ! -f $outbam ]; then
 		echo "$(timestamp) Aligning reads to genome ..."
 		hisat_options=""
 		if [ "$R2" == "" ]; then
@@ -400,72 +399,50 @@ function genome_align {
 		fi
 		hisat2 --no-softclip --no-discordant --dta \
 			-x $outdir/hisat2_index/genome $hisat_options -p $threads 2> $outdir/$lib/log_hisat2.txt \
-			| samtools sort -O bam -@ $threads -o $outdir/$lib/end2end_pre-align.bam - 2>> $outdir/$lib/log_hisat2.txt
-		samtools flagstat $outdir/$lib/end2end_pre-align.bam > $outdir/$lib/end2end_pre-align.bam.flagstat
-		samtools index -@ $threads -b $outdir/$lib/end2end_pre-align.bam
+			| samtools sort -O bam -@ $threads -o $outbam - 2>> $outdir/$lib/log_hisat2.txt
+		samtools flagstat $outbam > $outbam.flagstat
+		samtools index -@ $threads -b $outbam
 		echo "$(timestamp) $(grep 'overall alignment rate' $outdir/$lib/log_hisat2.txt)"
 	fi
 }
 
 function infer_strandedness {
-	# check BAM to infer whether we have SE or PE reads
-	# if SE, must treat as unstranded data
-	# if PE, infer strandedness if requested
-	npe=$({ samtools view -H $bam ; samtools view $bam | head -n 10000; } | samtools view -c -f 1 -)	
-	if [ "$npe" == "0" ]; then
-		stranded=0
-	elif [[ ! "$stranded" =~ [012] ]]; then
-		# infer strandedness
-		# + strand
-		gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="+"' $ann \
-			| bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 1000 -i -)
-		pR1=$(echo "$gtfsample" | samtools view -c -F 20 -f 64 -M -L - $bam)
-		pR2=$(echo "$gtfsample" | samtools view -c -F 20 -f 128 -M -L - $bam)
-			# - strand
-		gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="-"' $ann \
-			| bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 1000 -i -)
-		mR1=$(echo "$gtfsample" | samtools view -c -F 4 -f 80 -M -L - $bam)
-		mR2=$(echo "$gtfsample" | samtools view -c -F 4 -f 144 -M -L - $bam)
-			# summarise
-		R1=$((pR1+mR1))
-		R2=$((pR2+mR2))
-		if [ $((R1+R2)) == 0 ]; then
-			# double-check for single-end data; must be analysed as unstranded
+	if [ -f $outbam.strandedness.txt ]; then
+		stranded=$(cat $outbam.strandedness.txt)
+	else
+		# check BAM to infer whether we have SE or PE reads
+		# if SE, must treat as unstranded data
+		# if PE, infer strandedness if requested
+		npe=$({ samtools view -H $bam ; samtools view $bam | head -n 10000; } | samtools view -c -f 1 -)	
+		if [ "$npe" == "0" ]; then
 			stranded=0
-		else
-			# need at least 30:70 bias to infer as stranded
-			sR1=$((100*R1/(R1+R2)))
-			sR2=$((100*R2/(R1+R2)))
-			stranded=$(( 1 + 2*(sR1<=30) - (sR1<=70)))
+		elif [[ ! "$stranded" =~ [012] ]]; then
+			# infer strandedness
+			# + strand
+			gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="+"' $ann \
+				| bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 1000 -i -)
+			pR1=$(echo "$gtfsample" | samtools view -c -F 20 -f 64 -M -L - $bam)
+			pR2=$(echo "$gtfsample" | samtools view -c -F 20 -f 128 -M -L - $bam)
+				# - strand
+			gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="-"' $ann \
+				| bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 1000 -i -)
+			mR1=$(echo "$gtfsample" | samtools view -c -F 4 -f 80 -M -L - $bam)
+			mR2=$(echo "$gtfsample" | samtools view -c -F 4 -f 144 -M -L - $bam)
+				# summarise
+			R1=$((pR1+mR1))
+			R2=$((pR2+mR2))
+			if [ $((R1+R2)) == 0 ]; then
+				# double-check for single-end data; must be analysed as unstranded
+				stranded=0
+			else
+				# need at least 30:70 bias to infer as stranded
+				sR1=$((100*R1/(R1+R2)))
+				sR2=$((100*R2/(R1+R2)))
+				stranded=$(( 1 + 2*(sR1<=30) - (sR1<=70)))
+			fi
+			echo "$stranded" > "$outbam.strandedness.txt"	
 		fi
 		echo "$(timestamp) Inferred library strandedness: $stranded"
-	fi
-}
-
-function quantify_background {
-	# PE data needs -p flag in featureCounts
-	if [ "$npe" == "0" ]; then
-		fcpaired=""
-	else
-		fcpaired="-p"
-	fi
-
-	# quantify end2end alignments
-	# use actual strandedness
-	if [ ! -f $bam.fc.txt ]; then
-		echo "$(timestamp) Quantifying background gene coverage ..."	
-		featureCounts -a $ann -o $bam.fc.txt \
-			-t $featureid -g $metafeatureid -s $stranded $fcpaired -C -O -M -T $threads \
-			$bam > $outdir/$lib/log_featureCounts.bg.txt 2>&1
-	fi
-	
-	# quantify unsuccessful candidate reads (not end2end and no SL)
-	# due to the pseudo-stranding done during candidate read extraction, strandedness is 1 (or 0 for unstranded data)
-	if [ ! -f $outdir/$lib/unsuccessful.bam.txt ]; then
-		echo "$(timestamp) Quantifying unsuccessful reads ..."	
-		featureCounts -a $ann -o $outdir/$lib/unsuccessful.bam.txt \
-			-t $featureid -g $metafeatureid -s $(($stranded>0)) $fcpaired -C -O -M -T $threads \
-			$outdir/$lib/unsuccessful.bam > $outdir/$lib/log_featureCounts.unsuccessful.txt 2>&1
 	fi
 }
 
@@ -568,21 +545,54 @@ function sl_realign {
 	done
 }
 
+
+function quantify_background {
+	# PE data needs -p flag in featureCounts
+	if [ "$npe" == "0" ]; then
+		fcpaired=""
+	else
+		fcpaired="-p"
+	fi
+
+	# quantify end2end alignments
+	# use actual strandedness
+	if [ ! -f $outbam.fc.txt ]; then
+		echo "$(timestamp) Quantifying background gene coverage ..."	
+		if [ ! -f $outbam ]; then
+			ln -fs $(pwd)/$bam $outbam
+		fi
+		featureCounts -a $ann -o $outbam.fc.txt \
+			-t $featureid -g $metafeatureid -s $stranded $fcpaired -C -O -M -T $threads \
+			$outbam > $outdir/$lib/log_featureCounts.bg.txt 2>&1
+	fi
+	
+	# quantify unsuccessful candidate reads (not end2end and no SL)
+	# due to the pseudo-stranding done during candidate read extraction, strandedness is 1 (or 0 for unstranded data)
+	if [ ! -f $outdir/$lib/unsuccessful.bam.txt ]; then
+		echo "$(timestamp) Quantifying unsuccessful reads ..."	
+		featureCounts -a $ann -o $outdir/$lib/unsuccessful.bam.txt \
+			-t $featureid -g $metafeatureid -s $(($stranded>0)) $fcpaired -C -O -M -T $threads \
+			$outdir/$lib/unsuccessful.bam > $outdir/$lib/log_featureCounts.unsuccessful.txt 2>&1
+	fi
+}
+
 #
 # if a library-design file is specified, loop through libraries
 function library_pipeline {
 	echo "$(timestamp) >>> Processing library $lib"
 	lib="1-library_$lib"
+	outbam="$outdir/$lib/end2end_pre-align.bam"
 	mkdir -p $outdir/$lib
 	if [ "$bam" == "" ]; then
 		trim_reads
 		genome_align
+		bam=$outbam
 	fi
 	infer_strandedness
 	read_extract
 	sl_screen
 	sl_realign
-	quantify_background
+	quantify_background	
 }
 if [ ! "$design" == "" ]; then
 	while IFS='#' read lib stranded R1 R2 clean bam

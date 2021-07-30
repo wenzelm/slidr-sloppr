@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-slidr_version <- "1.1.4"
+slidr_version <- "1.1.5"
 
 library("parallel")
 library("data.table")

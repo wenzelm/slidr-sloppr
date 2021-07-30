@@ -22,7 +22,7 @@ function load_dependencies {
 	module load bowtie2-2.3.5
 }
 
-title="#\n# SLIDR - Spliced Leader IDentification from RNA-Seq data\n# Version 1.1.4\n#"
+title="#\n# SLIDR - Spliced Leader IDentification from RNA-Seq data\n# Version 1.1.5\n#"
 
 function printhelp {
 	echo -e "$title"
@@ -82,7 +82,6 @@ fi
 outdir="SLIDR_$(date +"%Y-%m-%d_%H-%M-%S")"
 threads=$(nproc)
 stranded="x"
-aligner="hisat2"
 clean="no"
 tlength=8
 tscale=1.0
@@ -142,7 +141,6 @@ do
 				vsopt="--sizeorder"
 				cmdline+=" --agc"
 		shift;;
-
 		-e)		evalue=$2
 				cmdline+=" -e $2"
 		shift; shift;;
@@ -405,8 +403,7 @@ function trim_reads {
 }
 
 function genome_align {
-	bam="$outdir/$lib/alignments-x$tscale.bam"
-	if [ ! -f $bam ]; then
+	if [ ! -f $outbam ]; then
 		echo "$(timestamp) Aligning reads to genome ..."
 		hisat_options=""
 		if [ "$R2" == "" ]; then
@@ -414,19 +411,17 @@ function genome_align {
 		else
 			hisat_options+="-1 $R1 -2 $R2"
 		fi
-		
 		hisat2 --sp 1,0 --mp 3,1 --score-min L,5,$(echo "$tscale" | awk '{print -0.4*$0}') \
-			-x $outdir/hisat2_index/genome $hisat_options -p $threads 2> $bam.log_hisat2.txt \
-			| samtools sort -O bam -@ $threads -o $bam - 2>> $bam.log_hisat2.txt
-		samtools flagstat $bam > $bam.flagstat
-		samtools index -@ $threads -b $bam
-		echo "$(timestamp) $(grep 'overall alignment rate' $bam.log_hisat2.txt)"
+			-x $outdir/hisat2_index/genome $hisat_options -p $threads 2> $outbam.log_hisat2.txt \
+			| samtools sort -O bam -@ $threads -o $outbam - 2>> $outbam.log_hisat2.txt
+		samtools flagstat $outbam > $outbam.flagstat
+		samtools index -@ $threads -b $outbam
+		echo "$(timestamp) $(grep 'overall alignment rate' $outbam.log_hisat2.txt)"
 	fi
 }
 
 function transcriptome_align {
-	bam="$outdir/$lib/alignments-x$tscale.bam"
-	if [ ! -f $bam ]; then
+	if [ ! -f $outbam ]; then
 		echo "$(timestamp) Aligning reads to transcriptome ..."
 		bowtie_options=""
 		if [ "$R2" == "" ]; then
@@ -435,11 +430,11 @@ function transcriptome_align {
 			bowtie_options+="-1 $R1 -2 $R2"
 		fi
 		bowtie2 --local --score-min L,5,$(echo "$tscale" | awk '{print 1-($0*0.4)}') --ma 1 --mp 3,1 -k 5 \
-			-x $outdir/bowtie2_index/transcriptome $bowtie_options -p $threads 2> $bam.log_bowtie2.txt \
-			| samtools sort -O bam -@ $threads -o $bam - 2>> $bam.log_bowtie2.txt
-		samtools flagstat $bam > $bam.flagstat
-		samtools index -@ $threads -b $bam
-		echo "$(timestamp) $(grep 'overall alignment rate' $bam.log_bowtie2.txt)"
+			-x $outdir/bowtie2_index/transcriptome $bowtie_options -p $threads 2> $outbam.log_bowtie2.txt \
+			| samtools sort -O bam -@ $threads -o $outbam - 2>> $outbam.log_bowtie2.txt
+		samtools flagstat $outbam > $outbam.flagstat
+		samtools index -@ $threads -b $outbam
+		echo "$(timestamp) $(grep 'overall alignment rate' $outbam.log_bowtie2.txt)"
 	fi
 }
 
@@ -449,42 +444,47 @@ function transcriptome_align {
 
 function infer_strandedness {
 	if [[ ! "$stranded" =~ [012] ]]; then
-		# infer strandedness if annotations are available
-		# otherwise, strandedness must be 0
-		if [ "$ann" == "" ]; then
-			stranded=0
+		if [ -f $outbam.strandedness.txt ]; then
+			stranded=$(cat $outbam.strandedness.txt)
 		else
-			# check if we have single-end reads:
-			# if so, must treat like unstranded data
-			npe=$({ samtools view -H $bam ; samtools view $bam | head -n 10000; } | samtools view -c -f 1 -)
-			if [ "$npe" == "0" ]; then
+			# infer strandedness if annotations are available
+			# otherwise, strandedness must be 0
+			if [ "$ann" == "" ]; then
 				stranded=0
 			else
-				# + strand
-				gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="+"' $ann \
-					| bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 1000 -i -)
-				pR1=$(echo "$gtfsample" | samtools view -c -F 20 -f 64 -M -L - $bam)
-				pR2=$(echo "$gtfsample" | samtools view -c -F 20 -f 128 -M -L - $bam)
-
-				# - strand
-				gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="-"' $ann \
-					| bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 1000 -i -)
-				mR1=$(echo "$gtfsample" | samtools view -c -F 4 -f 80 -M -L - $bam)
-				mR2=$(echo "$gtfsample" | samtools view -c -F 4 -f 144 -M -L - $bam)
-
-				# summarise
-				R1=$((pR1+mR1))
-				R2=$((pR2+mR2))
-				if [ $((R1+R2)) == 0 ]; then
-					# double-check for single-end data; must be analysed as unstranded
+				# check if we have single-end reads:
+				# if so, must treat like unstranded data
+				npe=$({ samtools view -H $bam ; samtools view $bam | head -n 10000; } | samtools view -c -f 1 -)
+				if [ "$npe" == "0" ]; then
 					stranded=0
 				else
-					# need at least 30:70 bias to infer as stranded
-					sR1=$((100*R1/(R1+R2)))
-					sR2=$((100*R2/(R1+R2)))
-					stranded=$(( 1 + 2*(sR1<=30) - (sR1<=70)))
+					# + strand
+					gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="+"' $ann \
+						| bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 1000 -i -)
+					pR1=$(echo "$gtfsample" | samtools view -c -F 20 -f 64 -M -L - $bam)
+					pR2=$(echo "$gtfsample" | samtools view -c -F 20 -f 128 -M -L - $bam)
+
+					# - strand
+					gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="-"' $ann \
+						| bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 1000 -i -)
+					mR1=$(echo "$gtfsample" | samtools view -c -F 4 -f 80 -M -L - $bam)
+					mR2=$(echo "$gtfsample" | samtools view -c -F 4 -f 144 -M -L - $bam)
+
+					# summarise
+					R1=$((pR1+mR1))
+					R2=$((pR2+mR2))
+					if [ $((R1+R2)) == 0 ]; then
+						# double-check for single-end data; must be analysed as unstranded
+						stranded=0
+					else
+						# need at least 30:70 bias to infer as stranded
+						sR1=$((100*R1/(R1+R2)))
+						sR2=$((100*R2/(R1+R2)))
+						stranded=$(( 1 + 2*(sR1<=30) - (sR1<=70)))
+					fi
 				fi
 			fi
+			echo "$stranded" > $outbam.strandedness.txt			
 		fi
 		echo "$(timestamp) Inferred library strandedness: $stranded"
 	fi
@@ -516,45 +516,45 @@ function tail_extract {
 	
 	echo "$(timestamp) Extracting soft-clipped tails from alignments ..."
 
-	{ if [ ! -f "$bam.tails+5p.fa.gz" ]; then
-		samtools view -H $bam > "$bam.tails+5p.sam"
+	{ if [ ! -f "$outbam.tails+5p.fa.gz" ]; then
+		samtools view -H $bam > "$outbam.tails+5p.sam"
 		samtools view -F 20 -f $((0+ (64*$stranded))) $bam \
-			| awk '$6 ~ "^[0-9]*S"{$1="aln+5p"NR"_"$1; print}' OFS="\t" | tee -a $bam.tails+5p.sam \
+			| awk '$6 ~ "^[0-9]*S"{$1="aln+5p"NR"_"$1; print}' OFS="\t" | tee -a $outbam.tails+5p.sam \
 			| awk '{gsub("S.*", "", $6); t=substr($10,1,$6); print ">"$1"\n"t}' \
-			| seqtk seq -U > "$bam.tails+5p.fa"
-		gzip $bam.tails+5p.sam
-		gzip $bam.tails+5p.fa
+			| seqtk seq -U > "$outbam.tails+5p.fa"
+		gzip $outbam.tails+5p.sam
+		gzip $outbam.tails+5p.fa
 	fi; } &
-	{ if [ ! -f "$bam.tails-5p.fa.gz" ]; then
-		samtools view -H $bam > "$bam.tails-5p.sam"	
+	{ if [ ! -f "$outbam.tails-5p.fa.gz" ]; then
+		samtools view -H $bam > "$outbam.tails-5p.sam"	
 		samtools view -F 4 -f $((16+ (64*$stranded))) $bam \
-			| awk '$6 ~ "[0-9]*S$"{$1="aln-5p"NR"_"$1; print}' OFS="\t" | tee -a $bam.tails-5p.sam \
+			| awk '$6 ~ "[0-9]*S$"{$1="aln-5p"NR"_"$1; print}' OFS="\t" | tee -a $outbam.tails-5p.sam \
 			| awk '{gsub("S", "", $6); gsub(".*[A-Z]", "", $6); 
 				t=substr($10,length($10)+1-$6,$6); print ">"$1"\n"t}' \
-			| seqtk seq -Ur > "$bam.tails-5p.fa"
-		gzip $bam.tails-5p.sam
-		gzip $bam.tails-5p.fa
+			| seqtk seq -Ur > "$outbam.tails-5p.fa"
+		gzip $outbam.tails-5p.sam
+		gzip $outbam.tails-5p.fa
 	fi; } &		
-	{ if [ ! -f "$bam.tails+3p.fa.gz" ]; then	
-		samtools view -H $bam > "$bam.tails+3p.sam"
+	{ if [ ! -f "$outbam.tails+3p.fa.gz" ]; then	
+		samtools view -H $bam > "$outbam.tails+3p.sam"
 		samtools view -F 20 -f $((0+ (192-64*$stranded)*($stranded>0))) $bam \
-			| awk '$6 ~ "[0-9]*S$"{$1="aln+3p"NR"_"$1; print}' OFS="\t" | tee -a $bam.tails+3p.sam \
+			| awk '$6 ~ "[0-9]*S$"{$1="aln+3p"NR"_"$1; print}' OFS="\t" | tee -a $outbam.tails+3p.sam \
 			| awk '{gsub("S", "", $6); gsub(".*[A-Z]", "", $6); 
 				t=substr($10,length($10)+1-$6,$6); print ">"$1"\n"t}' \
-			| seqtk seq -Ur > "$bam.tails+3p.fa"
-		gzip $bam.tails+3p.sam
-		gzip $bam.tails+3p.fa
+			| seqtk seq -Ur > "$outbam.tails+3p.fa"
+		gzip $outbam.tails+3p.sam
+		gzip $outbam.tails+3p.fa
 	fi; } &
-	{ if [ ! -f "$bam.tails-3p.fa.gz" ]; then
-		samtools view -H $bam > "$bam.tails-3p.sam"
+	{ if [ ! -f "$outbam.tails-3p.fa.gz" ]; then
+		samtools view -H $bam > "$outbam.tails-3p.sam"
 		samtools view -F 4 -f $((16+ (192-64*$stranded)*($stranded>0))) $bam \
-			| awk '$6 ~ "^[0-9]*S"{$1="aln-3p"NR"_"$1; print}' OFS="\t" | tee -a $bam.tails-3p.sam \
+			| awk '$6 ~ "^[0-9]*S"{$1="aln-3p"NR"_"$1; print}' OFS="\t" | tee -a $outbam.tails-3p.sam \
 			| awk '{gsub("S.*", "", $6); t=substr($10,1,$6); print ">"$1"\n"t}' \
-			| seqtk seq -U > "$bam.tails-3p.fa"
-		gzip $bam.tails-3p.sam
-		gzip $bam.tails-3p.fa
+			| seqtk seq -U > "$outbam.tails-3p.fa"
+		gzip $outbam.tails-3p.sam
+		gzip $outbam.tails-3p.fa
 	fi; } & wait	
-	echo "$(timestamp) Extracted $(zgrep -h '^>' $bam.tails*p.fa.gz | grep -c '^>') tails"
+	echo "$(timestamp) Extracted $(zgrep -h '^>' $outbam.tails*p.fa.gz | grep -c '^>') tails"
 }
 
 # we need to extract tails for each library
@@ -563,6 +563,7 @@ function tail_extract {
 function library_pipeline {
 	echo "$(timestamp) >>> Processing library $lib"
 		lib="1-library_$lib"
+		outbam="$outdir/$lib/alignments-x$tscale.bam"
 		mkdir -p $outdir/$lib
 		if [ "$bam" == "" ]; then
 			trim_reads
@@ -571,6 +572,7 @@ function library_pipeline {
 			elif [ ! "$transcriptome" == "" ]; then
 				transcriptome_align
 			fi
+			bam=$outbam
 		fi
 		infer_strandedness
 		tail_extract
