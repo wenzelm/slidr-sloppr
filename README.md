@@ -31,6 +31,7 @@ Full descriptions of the implementation are detailed in the BMC Bioinformatics a
         - [My organism has very diverse SLs with vastly different SL RNA characteristics - how to run SLIDR?](#slidrguide5)
         - [SLIDR has found a known SL but reports fewer SL RNA genes than expected - what am I missing?](#slidrguide6)
         - [Should I use DGC or AGC clustering?](#agc)
+		- [I want to analyse hundreds of RNA-Seq libraries - can SLIDR handle it?](#slidrguide8)
     - [SLOPPR](#slopprguidelines)
         - [Multiple SLs; some are specialised for resolving downstream operonic genes](#slopprguide1)
         - [Multiple SLs; all are specialised for resolving downstream operonic genes](#slopprguide2)
@@ -40,6 +41,7 @@ Full descriptions of the implementation are detailed in the BMC Bioinformatics a
         - [Single SL; specialised for resolving downstream operonic genes](#slopprguide6)
         - [Single SL; specialised for resolving upstream and downstream operonic genes](#slopprguide7)
         - [Single SL; specialisation absent](#slopprguide8)
+		- [I want to analyse hundreds of RNA-Seq libraries - can SLOPPR handle it?](#slopprguide9)
 - [Update log](#updates)
 - [Citation](#citation)
 
@@ -165,7 +167,11 @@ Path to directory for temporary files. Default is your system's TMPDIR; specifyi
 
 <a name="input"></a>
 #### RNA-Seq data input
-SLIDR and SLOPPR accept single-end or paired-end RNA-Seq reads in FASTQ(.gz) format or read alignments in BAM format. The following options are available to specify a single library:
+SLIDR and SLOPPR accept single-end or paired-end RNA-Seq reads in FASTQ(.gz) format or read alignments in BAM format. 
+
+When read alignments are used, the pipelines will extract candidate reads for analysis straight from these alignments. This means that generic BAM alignments performed without appropriate parameters for [SLIDR](#softclipalign) or [SLOPPR](#slopprguide9) are NOT suitable for analysis; please extract reads from such alignments in FASTQ format and use these reads as input for the pipelines.
+
+The following options are available to specify a single library:
 
 `-1 <file>`
 Path to R1 reads in FASTQ(.gz) or FASTA(.gz) format.
@@ -177,7 +183,7 @@ Path to R2 reads in FASTQ(.gz) or FASTA(.gz) format.
 If specified, basic quality-trimming of 3' ends of reads and removal of Illumina adapters is carried out using `cutadapt -a AGATCGGAAGAGC -q 20 -m 20`. This is a convenience function and is not intended to replace careful inspection and quality-control of raw data prior to running SLIDR or SLOPPR.
 
 `-b <file>`
-Path to read alignments in BAM format. A BAI index file must be present in the same location.
+Path to read alignments in BAM format. A BAI index file must be present in the same location. This option is designed to enable re-using of BAM alignments from previous SLIDR/SLOPPR runs. It is NOT designed for generic BAM alignments!
 
 `-r <0|1|2|x>`
 Read strandedness generated during chemical library prep. This parameter is equivalent to the `-s` option in FeatureCounts:
@@ -490,6 +496,7 @@ Conversely, using DGC, tail 5 clusters correctly with tail 2 because it is longe
 It is obvious that the two clustering methods are bound to yield very different results in organisms with many SL variants that happen to be conserved at the 3' end. In those cases, short tails will match multiple SLs and ties must be broken arbitrarily (length or abundance).
 Most datasets we have analysed yield better results with the default DGC, but others performed poorly and improved dramatically with AGC. We therefore suggest using the default DGC and trying AGC if SL read coverage is suspiciously low.
 
+<a name="slidrguide8"></a>
 #### I want to analyse hundreds of RNA-Seq libraries - can SLIDR handle it?
 
 Yes, but be aware of bottlenecks:
@@ -580,6 +587,7 @@ As above, but use intercistronic distance filtering to designate monocistronic g
     sloppr.sh -s sl_sequences.fasta -i x
     sloppr.sh -s sl_sequences.fasta -i 500
 
+<a name="slopprguide9"></a>
 #### I want to analyse hundreds of RNA-Seq libraries - can SLOPPR handle it?
 
 Yes, but be aware of bottlenecks:
@@ -590,6 +598,9 @@ Future updates may support more efficient data structures and automatic HPC job 
 
 <a name="updates"></a>
 # Update log
+
+## 21/09/2021
+fixed ggplot2 bug in figure legends (SLOPPR). Results are unaffected.
 
 ## 30/07/2021
 new versions SLIDR 1.1.5 and SLOPPR 1.1.5: fixed errors when BAM files are specified as input files

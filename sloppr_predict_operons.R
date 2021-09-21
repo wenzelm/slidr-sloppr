@@ -28,9 +28,9 @@ library("glmpca")
 #				11) output directory
 
 args = commandArgs(trailingOnly=TRUE)
-#args <- c("Visch_C74_sloppr/2-counts/SL.featureCounts.genes.clean.txt", 
-#			"C74_SL.fa", 
-#			"", 
+#args <- c("sloppr_toy_data//2-counts/SL.featureCounts.genes.clean.txt", 
+#			"SL.fasta", 
+#			"SL2.txt", 
 #		"infinity", 
 #			"no",
 #			"infinity",
@@ -240,8 +240,8 @@ sl_clusters <- function(dd){
     geom_text(data=meta, aes(x=x, label=label, hjust=0, color=SL.cluster), y=lbl.y, size=3, vjust=0.5) +
 	#geom_label(data=meta, aes(x=x, label=Index, fill=SL.cluster), hjust=0.5, size=3, y=lbl.y/5, color="white", fontface=2, vjust=0.5,
 	#	label.padding = unit(0.25, "lines"),  label.r = unit(0, "lines") ) +
-    scale_colour_manual(values=colours.cl) +
-	scale_fill_manual(values=colours.cl) +
+    scale_colour_manual(values=colours.cl[c("1", "2")]) +
+	scale_fill_manual(values=colours.cl[c("1", "2")]) +
     scale_shape_manual(values=c(19, 15)) +
     coord_flip() + 
     scale_y_reverse(expand = expansion(mult = c(0.02, 1.5))) +
@@ -326,7 +326,7 @@ pdf(file.path(wdir, paste0(outpref, ".SL_genes.pdf")), width=10, height=12)
 	gg.prop <- ggplot(ddf, aes(x=Library, y=Freq, fill=Var1)) + 
 		geom_bar(position="fill", stat="identity") + 
 		facet_wrap(~Type) +
-		scale_fill_manual(name="Gene status", values=colours.cl) +
+		scale_fill_manual(name="Gene status", values=colours.cl[levels(ddf$Var1)]) +
 		scale_y_continuous(labels=percent) +
 		xlab("Library") + ylab("Percent") +
 		coord_flip() + 
@@ -623,7 +623,7 @@ pdf(file.path(wdir, paste0(outpref, ".intergenic_distances.pdf")), width=8, heig
 	  geom_violin(trim=F, bw=0.3, alpha=1, color="white", position=position_dodge(width = 0.7)) +
 	  #geom_point(shape=21, alpha=0.2, color="white", position=position_dodge(width = 0.7)) + 
 	  geom_boxplot(color="white", width=0.2, position=position_dodge(width = 0.7), outlier.shape=NA) +
-	  scale_fill_manual(name="Gene class", values=colours.cl) +
+	  scale_fill_manual(name="Gene class", values=colours.cl[levels(ddf$Operonic)]) +
 	  scale_y_log10(labels=label_number(accuracy = 1, big.mark = ","), limits=c(1, 1e6)) +
 	  scale_x_discrete(position="top") +
 	  #scale_x_discrete(labels=c("Cluster1", "Cluster2", "SL2")) +

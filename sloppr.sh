@@ -19,7 +19,7 @@ function load_dependencies {
 	module load subread-1.6.2
 }
 
-title="#\n# SLOPPR - Spliced-Leader-informed Operon Prediction from RNA-Seq data\n# Version 1.1.4\n#"
+title="#\n# SLOPPR - Spliced-Leader-informed Operon Prediction from RNA-Seq data\n# Version 1.1.5\n#"
 
 function printhelp {
 	echo -e "$title"
@@ -722,7 +722,7 @@ fi
 #				6) number of threads
 echo "$(timestamp) >>> STAGE 3: Operon prediction"
 
-opdir="$outdir/3-operons-z$agg-0$zero-d$slrr-u$upstream-i$dist"
+opdir="$outdir/3-operons-$(date +"%Y-%m-%d-%H:%M:%S")-z$agg-0$zero-d$slrr-u$upstream-i$dist"
 mkdir -p $opdir
 #if [ -f $outdir/operons/operons.gff3 ]; then
 	echo "$(timestamp) Predicting operons ..."	
