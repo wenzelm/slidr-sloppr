@@ -599,6 +599,9 @@ Future updates may support more efficient data structures and automatic HPC job 
 <a name="updates"></a>
 # Update log
 
+## 21/01/2022
+new version SLIDR 1.1.6: fixed error when reading empty columns with data.table
+
 ## 21/09/2021
 fixed ggplot2 bug in figure legends (SLOPPR). Results are unaffected.
 

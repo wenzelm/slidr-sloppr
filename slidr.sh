@@ -22,7 +22,7 @@ function load_dependencies {
 	module load bowtie2-2.3.5
 }
 
-title="#\n# SLIDR - Spliced Leader IDentification from RNA-Seq data\n# Version 1.1.5\n#"
+title="#\n# SLIDR - Spliced Leader IDentification from RNA-Seq data\n# Version 1.1.6\n#"
 
 function printhelp {
 	echo -e "$title"

@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-slidr_version <- "1.1.5"
+slidr_version <- "1.1.6"
 
 library("parallel")
 library("data.table")
@@ -26,11 +26,13 @@ fofn <- readLines(file.path(wdir, "filters.fofn"))
 # read info
 ri <- fread(cmd=paste0("zcat '", fofn[1], "'"),
 			sep="\t", header=F, showProgress=F, 
+			colClasses="character",
 			col.names=c("Read","Centroid"))
 
 # acceptor info
 ai <- fread(cmd=paste0("zcat '", fofn[2], "'"),
 			sep="\t", header=F, showProgress=F, 
+			colClasses="character",
 			col.names=c("Read","Chrom_Gene","Pos_Gene", "Acceptor"))
 ai <- merge(ri, ai, by="Read", allow.cartesian=TRUE, sort=F)
 ai[,Read:=gsub("aln[^_]*_", "", Read)]
@@ -40,6 +42,7 @@ setkeyv(ai, "Centroid")
 # donor info
 di <- fread(cmd=paste0("zcat '", fofn[3], "'"),
 			sep="\t", header=F, showProgress=F, 
+			colClasses="character",
 			col.names=c("Centroid","Size","Chrom_Tail","Pos_Tail",
 					"BLASTN_Match","Outron_Overlap","Donor_Region"))
 set(di,,"Size", NULL)					
@@ -49,6 +52,7 @@ di[,Tail:=paste0(BLASTN_Match, Outron_Overlap)]
 # add SL tail clusterinfo
 si <- fread(cmd=paste0("zcat '", fofn[5], "'"),
 			sep="\t", header=F, showProgress=F, 
+			colClasses="character",
 			col.names=c("Cluster", "Centroid","BLASTN_Match", "Outron_Overlap"))
 di <- merge(di, si, by=c("Centroid","BLASTN_Match", "Outron_Overlap"), allow.cartesian=TRUE, sort=F)
 rm(si)
@@ -154,7 +158,8 @@ cat(paste(uniqueN(ai[,Consensus]), "consensus SLs\n... "))
 
 # RNAfold info
 rna <- fread(cmd=paste0("zcat '", fofn[4], "'"),
-			sep="\t", header=F, showProgress=F, 
+			sep="\t", header=F, showProgress=F,
+			colClasses=c("character", "character", "numeric", "numeric"),
 			col.names=c("Donor_Region", "Loops","MFE_Frequency","Ensemble_Diversity"))
 rna[,Loops:=sapply(gregexpr("\\(\\.+\\)", Loops), function(x) length(attr(x, "match.length")))]
 
