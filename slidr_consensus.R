@@ -1,6 +1,7 @@
 #!/usr/bin/env Rscript
 
-slidr_version <- "1.1.6"
+slidr_version <- "1.2"
+filemax <- 100		# write individual output files for up to 100 SLs. Increase if required for convenience.
 
 library("parallel")
 library("data.table")
@@ -39,6 +40,34 @@ ai[,Read:=gsub("aln[^_]*_", "", Read)]
 rm(ri)
 setkeyv(ai, "Centroid")
 
+cat(paste0(uniqueN(ai[,Read]), " reads (", ai[,.N], " records) loaded\n... "))
+
+#
+# new: raw centroid read depth and numbers of acceptor sites
+# this is useful to have for transcriptome runs
+# because it can't be guaranteed that the subsequent filters retain the SLs (no SL-containing transcripts, or no SL RNAs)
+#
+rawdepth <- ai[, .(Reads=uniqueN(Read), Locations = uniqueN(c(Chrom_Gene, Pos_Gene))), by="Centroid"]
+setorderv(rawdepth, c("Locations", "Reads"), order=-1)
+
+centroidsfasta <- fread(cmd=paste0("zcat '", gsub("readinfo.txt", "centroids.fa", fofn[1]), "'"),
+			sep="\t", header=F, showProgress=F, 
+			colClasses="character")
+centroidsfasta <- data.table(Centroid=centroidsfasta[seq(1, nrow(centroidsfasta), 2), V1], Tail=centroidsfasta[seq(2, nrow(centroidsfasta), 2), V1])
+centroidsfasta[,Centroid:=gsub(";size.*", "", Centroid)]
+centroidsfasta[,Centroid:=gsub("^>", "", Centroid)]
+setkeyv(centroidsfasta, "Centroid")
+rawdepth <- merge(rawdepth, centroidsfasta, by="Centroid", allow.cartesian=TRUE, sort=F)
+set(rawdepth,,"Centroid", NULL)
+setcolorder(rawdepth, c("Tail", "Reads", "Locations"))
+write.table(rawdepth, file.path(wdir, "raw.tails.tsv"), row.names=F, col.names=T, quote=F, sep="\t")
+
+cat(paste0(nrow(rawdepth), " unique SL tails \n... "))
+
+#
+# continue with filters as normal
+#
+
 # donor info
 di <- fread(cmd=paste0("zcat '", fofn[3], "'"),
 			sep="\t", header=F, showProgress=F, 
@@ -46,7 +75,7 @@ di <- fread(cmd=paste0("zcat '", fofn[3], "'"),
 			col.names=c("Centroid","Size","Chrom_Tail","Pos_Tail",
 					"BLASTN_Match","Outron_Overlap","Donor_Region"))
 set(di,,"Size", NULL)					
-di[Outron_Overlap=="-",Outron_Overlap:=""]
+di[Outron_Overlap=="-", Outron_Overlap:=""]
 di[,Tail:=paste0(BLASTN_Match, Outron_Overlap)]
 
 # add SL tail clusterinfo
@@ -59,7 +88,7 @@ rm(si)
 set(di,,"BLASTN_Match", NULL)
 
 ai <- merge(di, ai, by="Centroid", allow.cartesian=TRUE, sort=F)
-cat(paste0(uniqueN(ai[,Read]), " reads (", ai[,.N], " records) loaded\n... "))
+cat(paste0(uniqueN(ai[,Read]), " reads (", ai[,.N], " records) with splice donor region \n... "))
 
 #
 # 2) resolve splice acceptor sites
@@ -123,7 +152,7 @@ ai[((Chrom_Tail != Chrom_Gene) | (Strand_Tail != Strand_Gene)), Distance:=-1]
 
 ai <- ai[Distance<0 | Distance>1000]
 
-cat(paste0(uniqueN(ai[,Read]), " reads (", ai[,.N]," records) with plausible SLTS pattern (>1 kbp between donor and acceptor site)\n... "))
+cat(paste0(uniqueN(ai[,Read]), " reads (", ai[,.N]," records) with plausible SLTS pattern (>1 kbp between splice donor and acceptor site)\n... "))
 
 #
 # 5) resolve cluster consensus
@@ -164,57 +193,71 @@ rna <- fread(cmd=paste0("zcat '", fofn[4], "'"),
 rna[,Loops:=sapply(gregexpr("\\(\\.+\\)", Loops), function(x) length(attr(x, "match.length")))]
 
 # first, generate summary table to prioritise SLs by coverage
-summ <- merge(ai, rna, by="Donor_Region", allow.cartesian=T, sort=F)[, 
-	.(Length=unique(nchar(Consensus)),	
-	  Reads=uniqueN(Read),	
-	  SL_RNA_Genes=uniqueN(.SD[Maj_Consensus==TRUE, ], by=c("Chrom_Tail", "Donor_Pos", "Strand_Tail")),
-	  SLTS_Sites=uniqueN(.SD, by=c("Chrom_Gene", "Start_Gene", "Stop_Gene", "Strand_Gene")),				
-	  Stem_Loops=paste(.SD[Maj_Consensus==TRUE, sort(unique(Loops))], collapse=";"),
-	  MFE_Frequency=paste(.SD[Maj_Consensus==TRUE, sort(unique(MFE_Frequency))], collapse=";"),
-	  Ensemble_Diversity=paste(.SD[Maj_Consensus==TRUE, sort(unique(Ensemble_Diversity))], collapse=";")
+# change Stem_Loop, MFE_Frequency and Ensemble_Diversity to median and range instead of exhaustive list
+ai <- merge(ai, rna, by="Donor_Region", allow.cartesian=T, sort=F)
+summ <- ai[, 
+	.(Length=             unique(nchar(Consensus)),	
+	  Reads=              uniqueN(Read),	
+	  SL_RNA_Genes=       uniqueN(.SD[Maj_Consensus==TRUE, ], by=c("Chrom_Tail", "Donor_Pos", "Strand_Tail")),
+	  SLTS_Sites=         uniqueN(.SD, by=c("Chrom_Gene", "Start_Gene", "Stop_Gene", "Strand_Gene")),				
+	  Stem_Loops=         .SD[Maj_Consensus==TRUE, paste0(as.integer(median(Loops)), " (", min(Loops), "-", max(Loops), ")")],
+	  MFE_Frequency=      .SD[Maj_Consensus==TRUE, paste0(round(median(MFE_Frequency), 3), " (", round(min(MFE_Frequency), 3), "-", round(max(MFE_Frequency), 3), ")")],
+	  Ensemble_Diversity= .SD[Maj_Consensus==TRUE, paste0(round(median(Ensemble_Diversity), 2), " (", round(min(Ensemble_Diversity), 2), "-", round(max(Ensemble_Diversity), 2), ")")]
+	  #Stem_Loops=paste(.SD[Maj_Consensus==TRUE, sort(unique(Loops))], collapse=";"),
+	  #MFE_Frequency=paste(.SD[Maj_Consensus==TRUE, sort(unique(MFE_Frequency))], collapse=";"),
+	  #Ensemble_Diversity=paste(.SD[Maj_Consensus==TRUE, sort(unique(Ensemble_Diversity))], collapse=";")
 	), by=Consensus]
 
 setorderv(summ, c("SLTS_Sites", "Reads"), order=-1)
-write.table(summ, file.path(wdir, "raw.tsv"), row.names=F, col.names=T, quote=F, sep="\t")
+write.table(summ, file.path(wdir, "raw.summary.tsv"), row.names=F, col.names=T, quote=F, sep="\t")
 
 summ <- summ[SLTS_Sites>1 & Reads>1]
 summ[,Name:=paste0(sl.prefix, 1:.N)]
 setcolorder(summ, c("Name", names(summ)[-ncol(summ)]))
-write.table(summ, file.path(wdir, "SLs.tsv"), row.names=F, col.names=T, quote=F, sep="\t")
+write.table(summ, file.path(wdir, "SL.summary.tsv"), row.names=F, col.names=T, quote=F, sep="\t")
 
-cat(paste(nrow(summ), "SLs with at least 2 reads and spliced to at least 2 genes\n... ")) 
+cat(paste(nrow(summ), "SLs with at least 2 reads and spliced to at least 2 sites\n... ")) 
 cat("Top 10 SLs:\n")
 print(head(summ[,c("Consensus", "Reads", "SL_RNA_Genes", "SLTS_Sites")], n=10), row.names=F)
 
 #
 # 7) write FASTA and GFF files
 #
-cat("Writing output files ...\n")
-dir.create(file.path(wdir, "SL_RNA_genes"))
+cat("... Writing output files ...\n")
+dir.create(file.path(wdir, "SLs"))
 
 # SL FASTA
-writeLines(summ[, c(paste0(">", Name), Consensus), by=seq_len(nrow(summ))][[2]], file.path(wdir, "SLs.fa"))
+writeLines(summ[, c(paste0(">", Name), Consensus), by=seq_len(nrow(summ))][[2]], file.path(wdir, "SL.sequences.fa"))
 
-# SLTS genes GFF
+# SLTS sites GFF
 # don't filter by majority consensus - every read matters
 writeSLTS <- function(d){
 	sl.name <- summ[Consensus==d[1,Consensus], Name]
 	if(length(sl.name)>0) {
-	gff <- unique(d, by=c("Chrom_Gene", "Start_Gene", "Stop_Gene", "Strand_Gene"))[order(Chrom_Gene, Start_Gene),
-		paste(Chrom_Gene, "SLIDR", "trans_splice_acceptor_site", Start_Gene, Stop_Gene, ".", Strand_Gene, ".", 
-		paste0("ID=", sl.name, ".trans-splice-site-", seq(1:.N)), sep="\t")]
-	writeLines(c("##gff-version 3",	paste("# predicted using SLIDR", slidr_version), gff), 
-		file.path(wdir, "SL_RNA_genes", paste0(sl.name, ".trans-splice-sites.gff3")))	
+		#gff <- unique(d, by=c("Chrom_Gene", "Start_Gene", "Stop_Gene", "Strand_Gene"))
+		gff <- d[, .(nReads=uniqueN(Read)), keyby = c(names(d)[-1])][order(Chrom_Gene, Start_Gene),
+			paste(Chrom_Gene, "SLIDR", "trans_splice_acceptor_site", Start_Gene, Stop_Gene, ".", Strand_Gene, ".", 
+			paste0("ID=", sl.name, ".trans-splice-site-", seq(1:.N), ";Reads=", nReads), sep="\t")]
+		
+		# append GFF data to main GFF file, but write individual GFF only for the first 100 (filemax) SLs
+		write(gff, file=file.path(wdir, "SL.acceptor_sites.gff3"), append=TRUE)
+		if(as.numeric(gsub(sl.prefix, "", sl.name)) <= filemax) { 
+			writeLines(c(gff.header, gff), 
+				file.path(wdir, "SLs", paste0(sl.name, ".acceptor_sites.gff3")))	
+		}
 	}
 	return(NA)
 }
-invisible(ai[, writeSLTS(.SD), by=Consensus, .SDcols=c("Consensus", "Chrom_Gene", "Start_Gene", "Stop_Gene", "Strand_Gene")])
+gff.header <- c("##gff-version 3",	paste("# predicted using SLIDR", slidr_version)) 
+write(gff.header, file=file.path(wdir, "SL.acceptor_sites.gff3"))
+invisible(ai[, writeSLTS(.SD), by=Consensus, .SDcols=c("Read", "Consensus", "Chrom_Gene", "Start_Gene", "Stop_Gene", "Strand_Gene")])
 
 # SL RNA genes
 # write only those satisfying majority consensus (reduced risk of pseudogenes)
 ai <- ai[Maj_Consensus==TRUE, ]
 ai[, Len:=nchar(Donor_Region)]
 setorderv(ai, c("Chrom_Tail", "Donor_Pos", "Len"), order=c(1,1,-1))			
+ai[, nReads:=uniqueN(Read), by = c("Consensus", "Chrom_Tail", "Donor_Pos")]
 ai <- unique(ai, by=c("Consensus", "Chrom_Tail", "Donor_Pos"))
 
 writeSLRNA <- function(d){
@@ -224,10 +267,14 @@ writeSLRNA <- function(d){
 			.(ID=paste0(">", sl.name, ".", 1:.N), Donor_Region,
 			  GFF=paste(Chrom_Tail, "SLIDR", "spliced_leader_RNA", 
 				Start_Tail,	Stop_Tail, ".", Strand_Tail, ".", 
-				paste0("ID=", sl.name, ".", seq(1:.N)), sep="\t"))]
-		writeLines(as.vector(apply(slRNA[,-3], 1, paste)), file.path(wdir, "SL_RNA_genes", paste0(sl.name, ".RNA_genes.fa")))
-		writeLines(c("##gff-version 3",	paste("# predicted using SLIDR", slidr_version), slRNA[,GFF]), 
-			file.path(wdir, "SL_RNA_genes", paste0(sl.name, ".RNA_genes.gff3")))	
+				paste0("ID=", sl.name, ".", seq(1:.N), ";Reads=", nReads), sep="\t"))]
+		
+		# write individual GFF only for the first 100 (filemax) SLs
+		if(as.numeric(gsub(sl.prefix, "", sl.name)) <= filemax) {
+			writeLines(as.vector(apply(slRNA[,-3], 1, paste)), file.path(wdir, "SLs", paste0(sl.name, ".RNA_genes.fa")))
+			writeLines(c("##gff-version 3",	paste("# predicted using SLIDR", slidr_version), slRNA[,GFF]), 
+				file.path(wdir, "SLs", paste0(sl.name, ".RNA_genes.gff3")))	
+		}
 		return(slRNA)
 	} else {
 		return(data.table(ID="", Donor_Region="", GFF=""))
@@ -235,15 +282,15 @@ writeSLRNA <- function(d){
 }
 
 SLRNA <- ai[Maj_Consensus==TRUE, writeSLRNA(.SD), by=Consensus, 
-	.SDcols=c("Consensus", "Len", "Donor_Region", "Chrom_Tail", "Start_Tail", "Stop_Tail", "Strand_Tail", "Donor_Pos")]
+	.SDcols=c("Consensus", "Len", "nReads", "Donor_Region", "Chrom_Tail", "Start_Tail", "Stop_Tail", "Strand_Tail", "Donor_Pos")]
 SLRNA[,Order:=as.integer(gsub(paste0(">", sl.prefix), "", gsub("\\.[0-9]*", "", ID)))]
 setorderv(SLRNA, "Order", order=1)
 
 # FASTA
 writeLines(as.vector(apply(SLRNA[!is.na(Order),c(2,3)], 1, paste)), 
-			file.path(wdir, "SL_RNA_genes.fa"))	
+			file.path(wdir, "SL.RNA_genes.fa"))	
 # GFF
 writeLines(c("##gff-version 3",	paste("# predicted using SLIDR", slidr_version), 
-	SLRNA[!is.na(Order), GFF]), file.path(wdir, "SL_RNA_genes.gff3"))
+	SLRNA[!is.na(Order), GFF]), file.path(wdir, "SL.RNA_genes.gff3"))
 
 q()

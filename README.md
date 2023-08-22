@@ -1,4 +1,4 @@
-# SLIDR and SLOPPR: A suite of two pipelines for flexible identification of spliced leader *trans*-splicing and prediction of eukaryotic operons from RNA-Seq data
+# SLIDR and SLOPPR: Pipelines for flexible identification of spliced leader *trans*-splicing and prediction of eukaryotic operons from RNA-Seq data
 
 SLIDR and SLOPPR identify spliced leaders (SLs) from 5'-tails of RNA-Seq reads that are soft-clipped after read alignment to a reference genome or transcriptome. SLIDR (Spliced leader identification from RNA-Seq data) assembles these read tails into full-length SLs and functional SL RNA genes. SLOPPR (Spliced leader-informed operon prediction from RNA-Seq data) searches read tails for a set of known SLs, quantifies SL-containing reads against all genes in the genome and uses SL usage patterns across genes to predict operons. SLOPPR can incorporate known SL specialisation for resolving downstream operonic genes (e.g., SL1/SL2-type SLs in nematodes), infer such specialisation *de novo*, or handle scenarios without SL specialisation.
 
@@ -10,8 +10,9 @@ Full descriptions of the implementation are detailed in the BMC Bioinformatics a
     - [Dependencies](#dependencies)
     - [Quick start with example data](#quickstart)
 - [Reference manual](#reference)
-    - [General options for both pipelines](#general)
+    - [General options](#general)
     - [RNA-Seq data input](#input)
+	- [Parallel execution on HPC clusters](#hpc)
     - [SLIDR (Spliced leader identification from RNA-Seq data)](#slidrparams)
         - [Reference assembly](#refassembly)
         - [Read tail clustering](#tailcluster)
@@ -100,11 +101,11 @@ This is particularly useful when using an HPC. Please edit/remove the content of
 <a name="quickstart"></a>
 ### Quick start with example data
 
-The script `example_data.sh` downloads the *C. elegans* genome assembly GCF_000002985.6 from NCBI, two very small RNA-Seq libraries from ENA (accessions ERR2756729 and ERR2756730) and runs basic SLIDR and SLOPPR analyses. Run this script to test the installation and to familiarise yourself with the workflow. Each analysis should complete within ten minutes using 16 threads and 32 GB of memory.
+The script `example_data.sh` downloads the *C. elegans* genome assembly GCF_000002985.6 from NCBI, two very small RNA-Seq libraries from ENA (accessions ERR2756729 and ERR2756730) and runs basic SLIDR and SLOPPR analyses. Run this script to test the installation and to familiarise yourself with the workflow. Each analysis should complete within ten minutes using 8 threads and 32 GB of memory.
 
-The script generates all input files and runs basic analyses, supplying the genome assembly (`-g`), the genome annotations (`-a`), the output directory (`-o`) and a configuration file for multiple libraries (`-m`). The SLOPPR run also supplies a FASTA file containing the SL sequences (`-s`) and a text file specifying the SL2-type SLs (`-S`):
+The script generates all input files and commands, supplying the genome assembly (`-g`), the genome annotations (`-a`), the output directory (`-o`) and a configuration file for multiple libraries (`-m`). The SLOPPR run also supplies a FASTA file containing the SL sequences (`-s`) and a text file specifying the SL2-type SLs (`-S`):
 
-    slidr.sh  -g toy_data/GCF_000002985.6_WBcel235_genomic.fna -a toy_data/GCF_000002985.6_WBcel235_genomic.gff -o slidr_toy_data  -m libraries_config.txt 
+    slidr.sh  -g toy_data/GCF_000002985.6_WBcel235_genomic.fna -a toy_data/GCF_000002985.6_WBcel235_genomic.gff -o slidr_toy_data  -m libraries_config.txt --agc
     sloppr.sh -g toy_data/GCF_000002985.6_WBcel235_genomic.fna -a toy_data/GCF_000002985.6_WBcel235_genomic.gff -o sloppr_toy_data -m libraries_config.txt -s SL.fasta -S SL2.txt
 
 *SL.fasta*:
@@ -121,8 +122,8 @@ The script generates all input files and runs basic analyses, supplying the geno
 The on-screen SLIDR results detail the expected SL1 and SL2 sequences, the numbers of reads assembled, the numbers of SL RNA genes identified and the numbers of *trans*-splice acceptor sites:
 
                    Consensus Reads SL_RNA_Genes SLTS_Sites
-      GGTTTAATTACCCAAGTTTGAG  6293           10       1217
-     GGTTTTAACCCAGTTTAACCAAG   159            1         67
+      GGTTTAATTACCCAAGTTTGAG  6393           10       1234
+     GGTTTTAACCCAGTTTAACCAAG   146            1         64
 	 
 The on-screen SLOPPR results detail expectedly low SL-trans-splicing rates (5.14 %) and 84 predicted operons using SL2 as a polycistron resolver:
 
@@ -151,7 +152,7 @@ Note that the SL-clustering algorithm may not correctly identify SL1/SL2-type SL
 <a name="general"></a>
 ### General options for both pipelines
 
-Both SLIDR and SLOPPR share general options for data input and output.
+SLIDR and SLOPPR share general options for data input and output:
 
 `-o <dir>`
 Path to output directory. If unspecified, the output directory is "./SLIDR_[date+time]" or "./SLOPPR_[date+time]"
@@ -160,16 +161,17 @@ Path to output directory. If unspecified, the output directory is "./SLIDR_[date
 Name prefix for predicted SLs or operons (default: SL for SLIDR and OP for SLOPPR). It is recommended to follow a three-letter abbreviation of the organism, for example `Cel` for *C. elegans*. 
 
 `-c <num>`
-Threads (default: all available cores obtained by `nproc`)
+CPU threads (default: 8. To use all available cores, enter  `$(nproc)`)
 
-`-T <dir>`
-Path to directory for temporary files. Default is your system's TMPDIR; specifying this option will change TMPDIR. For running SLIDR, it is highly recommended to choose a large TMP directory to avoid potential bottlenecks associated with the default `/tmp` partition.
+`--tmp <dir>`
+Path to directory for temporary files. Default is your system's TMPDIR; specifying this option will change TMPDIR. For running SLIDR on large datasets, it is highly recommended to choose a large TMP directory to avoid potential bottlenecks associated with the default `/tmp` partition.
 
 <a name="input"></a>
 #### RNA-Seq data input
-SLIDR and SLOPPR accept single-end or paired-end RNA-Seq reads in FASTQ(.gz) format or read alignments in BAM format. 
 
-When read alignments are used, the pipelines will extract candidate reads for analysis straight from these alignments. This means that generic BAM alignments performed without appropriate parameters for [SLIDR](#softclipalign) or [SLOPPR](#slopprguide9) are NOT suitable for analysis; please extract reads from such alignments in FASTQ format and use these reads as input for the pipelines.
+SLIDR and SLOPPR accept single-end or paired-end RNA-Seq reads in FASTQ(.gz) format.
+
+Read alignments in BAM format are also accepted, for convenience of re-using alignments from previous pipeline runs. Please note that generic BAM files produced outside the pipelines without appropriate parameters for [SLIDR](#softclipalign) or [SLOPPR](#slopprguide9) are NOT suitable as input! Please extract reads from such alignments in FASTQ format and then use these reads as input for the pipelines.
 
 The following options are available to specify a single library:
 
@@ -180,10 +182,10 @@ Path to R1 reads in FASTQ(.gz) or FASTA(.gz) format.
 Path to R2 reads in FASTQ(.gz) or FASTA(.gz) format.
 
 `-q`
-If specified, basic quality-trimming of 3' ends of reads and removal of Illumina adapters is carried out using `cutadapt -a AGATCGGAAGAGC -q 20 -m 20`. This is a convenience function and is not intended to replace careful inspection and quality-control of raw data prior to running SLIDR or SLOPPR.
+If specified, basic quality-trimming of 3' ends of reads and removal of Illumina adapters and poly-A/T tails is carried out using `cutadapt -a AGATCGGAAGAGC -a 'A{100}' -g 'T{100}' -n 3 -q 20 -m 20 -l 150 -O 1`. This is a useful convenience function but it is strongly recommended to carry out careful data filtering and trimming prior to running SLIDR or SLOPPR.
 
 `-b <file>`
-Path to read alignments in BAM format. A BAI index file must be present in the same location. This option is designed to enable re-using of BAM alignments from previous SLIDR/SLOPPR runs. It is NOT designed for generic BAM alignments!
+Path to pre-generated SLIDR/SLOPPR read alignments in BAM format. A BAI index file must be present in the same location. 
 
 `-r <0|1|2|x>`
 Read strandedness generated during chemical library prep. This parameter is equivalent to the `-s` option in FeatureCounts:
@@ -192,9 +194,9 @@ Read strandedness generated during chemical library prep. This parameter is equi
     1 = forward stranded data (R1 reads originate from sense strand)
     2 = reverse stranded data (R2 reads originate from sense strand)
 
-If strandedness is unknown, setting `-r x` will infer it if genome annotations are supplied. If in doubt, unstranded analysis (`-r 0`) is always acceptable even for stranded data. Stranded data will produce less noisy results if the correct strandedness parameter is supplied. 
+If strandedness is unknown, setting `-r x` (default) will infer it if genome annotations are supplied. If in doubt, unstranded analysis (`-r 0`) is always acceptable even for stranded data. Stranded data will produce less noisy results if the correct strandedness parameter is supplied. 
 
-Multiple libraries are not specified with these options but instead via a configuration file supplied with the `-m <file>` option. This tab-delimited file must contain six columns:
+Multiple libraries must not be specified with these options but instead via a configuration file supplied with the `-m <file>` option. This tab-delimited file must contain six columns:
 - Column 1: Library name
 - Column 2: Library strandedness (= `-r` option)
 - Column 3: Path to R1 reads (= `-1` option)
@@ -216,13 +218,48 @@ Leave columns empty if they are not required, for example:
 This configuration file allows great flexibility in mixing single-end and paired-end libraries with different strandedness and existing read alignments.
 Note: Avoid `#` characters in the file contents; they will be stripped! 
 
+<a name="hpc"></a>
+#### Parallel execution on HPC clusters
+Since version 1.2, SLIDR and SLOPPR can process libraries in parallel on HPC clusters. Default behaviour is sequential processing as in older versions.
+
+`--hpc`
+Switch on HPC mode. Automatic job submission and dependency control will be used to carry out the following workflow:
+
+1) The main script generates the genome/transcriptome index as in sequential mode
+2) For each library, a separate job is submitted, carrying out read alignment and SL tail extraction
+3) A final dependent job is submitted, finishing the pipeline after all parallel library jobs have completed
+
+The internal job submission control is designed for the SLURM job scheduler, but can be customised with the following options:
+
+`--hpcp <chr>`
+Command for submitting parallel jobs (one job per library). The default requests 4G of memory per specified thread (see `-c`). To modify, please specify the full submit command including all resources required **including an option for returning the job ID in plain format**:
+
+    --hpcp 'sbatch -c 4 --mem 8G --parsable'				# SLURM with hard-coded resources
+	--hpcp 'qsub -v -cwd -pe smp 4 -l h_vmem=2G -terse'		# Sun Grid Engine format
+	--hpcp 'msub -l nodes=1:ppn=4,pmem=8gb'					# MOAB format
+
+`--hpcd <chr>`
+Command for submitting the final dependent job. The default requests 8G of memory per specified thread (see `-c`). To modify, please specify the full submit command **ending with the option for specifying a job dependency list** for your HPC:
+
+    --hpcd 'sbatch -c 4 --mem 32G -d afterok:'						# SLURM with hard-coded resources
+	--hpcd 'qsub -v -cwd -pe smp 4 -l h_vmem=8G -hold_jid '			# Sun Grid Engine format
+	--hpcd 'msub -l nodes=1:ppn=4,pmem=32gb -l depend=afterok:'		# MOAB format
+
+`--hpcs <chr>`  
+Separator for job IDs in job dependency option. Default is ':' but some job schedulers (e.g., Sun Grid Engine) may require a comma instead (`--hpcs ','`)
+
+If these options are not flexible enough to work with your HPC, you can still make use of parallel processing by doing the following:
+
+1) Manually set up a task array job for aligning reads for all libraries (SLIDR:[HISAT2 or BOWTIE2 commands](#softclipalign); SLOPPR: `hisat2 --no-softclip --no-discordant`) 
+2) Use the BAM files instead of the raw reads as input for SLIDR/SLOPPR (`-b` option)
+
 <a name="slidrparams"></a>
 ### SLIDR: Spliced leader identification from RNA-Seq data
 
 <a name="refassembly"></a>
 #### Reference assembly
 
-SLIDR requires either a genomic or transcriptomic reference assembly. A genomic reference is recommended and will produce vastly superior results. Genome annotations are recommended because they improve read mapping in HISAT2 and allow SLIDR to infer strandedness of the RNA-Seq data if unknown.
+SLIDR requires either a genomic or transcriptomic reference assembly. A genomic reference is recommended and will produce vastly superior results. Genome annotations are recommended because they improve read mapping in HISAT2 and allow SLIDR to infer strandedness of the RNA-Seq data if unknown. SLIDR will also identify genes/transcripts in the annotations that overlap the predicted SL RNA genes and SLTS acceptor sites.
 
 `-g <file>`
 Path to genome assembly in FASTA(.gz) format.
@@ -233,6 +270,12 @@ Path to genome annotations in GFF(.gz) or GTF(.gz) format.
 `-t <file>`
 Path to transcriptome assembly in FASTA(.gz) format.
 
+`-T`
+Disable transcriptome trimming. Use this option if you want to use the supplied transcriptome as is. 
+
+NOTE: transcriptome trimming attempts to remove putative SL trans-spliced isoforms by clustering transcripts into genes and removing transcripts with 5' extension compared to other transcripts in each gene. Removing putative SLTS isoforms forces SL reads to align to non-trans-spliced isoforms of the gene and generate soft-clipped 5' read tails that are likely to contain the full 3' end of the SL sequence. These tails can then be aligned to the original untrimmed transcriptome to validate the SL sequence. The downside of this procedure is the aggressive loss of alternative non-trans-spliced isoforms, which may introduce alignment errors across exon-exon junctions.
+
+
 <a name="tailcluster"></a>
 #### Read tail clustering
 
@@ -241,7 +284,7 @@ Minimum length of soft-clipped tails to retain after alignment (default: 8). If 
 
 <a name="softclipalign"></a>
 `-x <num>`
-Scale factor for upper tail length limit (default: 1.0). This factor allows for controlling the amount of soft-clipping allowed during read alignment in HISAT2 or BOWTIE2. This is achieved via the minimum score functions:
+Scale factor for upper tail length limit (default: 1.0). This factor controls the amount of soft-clipping allowed during read alignment in HISAT2 or BOWTIE2. This is achieved via the minimum score functions:
 
     hisat2  --score-min L,5,-0.4*x --sp 1,0 --mp 3,1
     bowtie2 --score-min L,5,1-(0.4*x) --ma 1 --mp 3,1 --local
@@ -271,11 +314,11 @@ BLASTN E-value (default: 1). This parameter controls the stringency of the align
 `-D <chr>`
 Splice donor site pattern in regex notation (default: GT). Alternative nucleotides can be coded with character classes, for example, `-D 'G[TC]'` matches GT or GC, and `-D 'A[AG][TC]'` matches AAT, AAC, AGT or AGC. To switch off, specify empty character string (`-D ''`).
 
-`-S <chr>`
-*Sm* binding site motif and location in regex notation. This allows for searching additional motifs (*Sm* or otherwise) downstream of the splice donor site. The default (.{20,60}AT{4,6}G) matches the *Sm* binding sites ATTTTG, ATTTTTG or ATTTTTTG 20-60 bp downstream of the splice donor. Any custom regex patterns are supported, for example, `-S '.{20,60}AT{4,6}G.{20,30}T{3,5}'` to add a T-rich region 20-30 bp downstream of the *Sm* binding site. To disable, specify empty character string (`-S ''`).
-
 `-A <chr>`
 Splice acceptor site pattern in regex notation (default: AG). Alternative nucleotides can be coded with character classes, for example, `-A 'A[CG]'` matches GT or GC. To switch off, specify empty character string (`-A ''`)
+
+`-S <chr>`
+*Sm* binding site motif and location in regex notation. This allows for searching additional motifs (*Sm* or otherwise) downstream of the splice donor site. The default (.{20,60}AT{4,6}G) matches the *Sm* binding sites ATTTTG, ATTTTTG or ATTTTTTG 20-60 bp downstream of the splice donor. Any custom regex patterns are supported, for example, `-S '.{20,60}AT{4,6}G.{20,30}T{3,5}'` to add a T-rich region 20-30 bp downstream of the *Sm* binding site. To disable, specify empty character string (`-S ''`).
 
 `-R <chr>`
 Maximum SL RNA length excluding SL (default: 80). This length is measured starting from and including the splice donor site. The default of 80 bp is appropriate for nematode SL RNAs that are c. 100 bp long including a c. 22 bp SL.
@@ -289,18 +332,29 @@ Maximum base-pair span within stem-loop (default: 35). This parameter controls s
 <a name="slidroutput"></a>
 #### Output files:
 
+Log files and intermediate output files are written to the directories `1-library_[library name]`, `1-tails` and `2-RNA-filters`, representing each main pipeline stage.
+
 Final results are written to the directory `3-results-[suffix]` inside the specified output directory. The suffix of the directory name summarises the specified parameters to allow for convenient parameter sweeps within the same output directory, for example `slidr_toy_data/3-results-x1.0-l8-AGC-e1-R80-DGT-S.{20,60}AT{4,6}G-L35-AAG-O10`
 
-- `SL.tsv`: tab-delimited table summarising SL sequence, read coverage, numbers of SL RNA genes, numbers of SL *trans*-splice acceptor sites (equivalent to genes if genome annotations are accurate), numbers of stem loops and structure stability statistics from [RNAFold](https://www.tbi.univie.ac.at/RNA/RNAfold.1.html) (MFE frequency and ensemble diversity)
-- `raw.tsv`: same as `SL.tsv`, but including singleton SLs (defined by only a single read and/or spliced to only a single gene). 
-- `SL.fa`: all SL sequences in FASTA format
-- `SL_RNA_genes.fa`: all SL RNA gene sequences in FASTA format
-- `SL_RNA_genes.gff3`: all SL RNA genes in GFF3 format
-- `SL_RNA_genes/*.RNA_genes.fa`: SL RNA gene sequences (FASTA) for each SL
-- `SL_RNA_genes/*.RNA_genes.gff3`: SL RNA gene sequences (GFF3) for each SL
-- `SL_RNA_genes/*.trans-splice-sites.gff3`: SL *trans*-splice acceptor sites (GFF3) for each SL
+Main output:
 
-Log files and intermediate output files are written to the directories `1-library_[library name]`, `1-tails` and `2-RNA-filters`, representing each main pipeline stage.
+- `SL.summary.tsv`: tab-delimited table summarising SL sequence, read coverage, numbers of SL RNA genes, numbers of SL *trans*-splice acceptor sites, numbers (median and range) of stem loops and spatial structure stability statistics from [RNAFold](https://www.tbi.univie.ac.at/RNA/RNAfold.1.html) (MFE frequency and ensemble diversity). The spatial structure statistics could be used to manually rank SL candidates by plausibility (higher MFE frequency is better; lower ensemble diversity is better).
+- `SL.sequences.fa`: all SL sequences in FASTA format
+- `SL.RNA_genes.fa`: all SL RNA gene sequences in FASTA format
+- `SL.RNA_genes.gff3`: all SL RNA genes in GFF3 format
+- `SL.acceptor_sites.gff3`: all SL *trans*-splice acceptor sites in GFF3 format
+- `raw.summary.tsv`: same as `SL.summary.tsv`, but including singleton SLs (defined by only a single read and/or spliced to only a single acceptor site). 
+- `raw.tails.tsv`: summary of read depths of each unique read tail and numbers of read alignment locations. These are raw statistics prior to SL assembly and SL RNA filters; these might be useful for exploration if no good SLs can be found, particularly for runs with a reference transcriptome instead of a genome.
+
+Output per SL (in `SLs` subdirectory):
+
+- `SLs/*.RNA_genes.fa`: SL RNA gene sequences (FASTA) for each SL
+- `SLs/*.RNA_genes.gff3`: SL RNA gene sequences (GFF3) for each SL
+- `SLs/*.acceptor_sites`: SL *trans*-splice acceptor sites (GFF3) for each SL
+
+To avoid writing potentially thousands of output files, SL-specific output files are written only for the first 100 SL candidates. If this is not enough, the limit can be increased manually in the script `slidr_consensus.R` (line 4: `filemax <- 100`). Data for specific SLs could also easily be extracted from the main output files using `grep` or `awk`.
+
+If genome references annotations were supplied, an additional output file (`*.reference.txt`) is produced for each GFF3 output file, containing overlaps between each GFF3 entry and the genes/transcripts of the reference genome annotations (output of `bedtools intersect`). Note that SLTS acceptor sites are extended downstream by 100 bp to search for overlaps. This is a convenience function that does not replace careful manual curation of SL RNA genes and SLTS acceptor sites in a genome browser.
 
 <a name="slopprparams"></a>
 ### SLOPPR: Spliced leader-informed operon prediction from RNA-Seq data
@@ -399,11 +453,12 @@ Most of these files are also available in graphical format as PDF. Log files and
 <a name="slidrguide1"></a>
 #### I have got an unannotated draft genome for my organism - is this good enough?
 
-Yes, genome annotations are not mandatory and SLIDR will function fine without them. However, genome annotations are useful for two reasons:
+Yes, genome annotations are not mandatory and SLIDR will function fine without them. However, genome annotations are useful for three reasons:
 - Initial read alignment with HISAT2 benefits from exon/intron boundaries and splice sites defined by genome annotations
 - Unknown library strandedness can be inferred from read alignments and genome annotations
+- Predicted SL RNA genes and SLTS acceptor sites can be overlapped with gene/transcript annotations for manual validation
 
-Note that all SLIDR results are solely based on read alignments and make no reference to annotated genes.
+Note that all SLIDR results are solely based on read alignments and do not take gene annotations into account.
 
 <a name="slidrguide2"></a>
 #### I have got neither a genome nor a transcriptome for my organism - can I run SLIDR?
@@ -500,11 +555,11 @@ Most datasets we have analysed yield better results with the default DGC, but ot
 #### I want to analyse hundreds of RNA-Seq libraries - can SLIDR handle it?
 
 Yes, but be aware of bottlenecks:
-- Read alignment and tail extraction are the most time consuming steps. SLIDR processes libraries sequentially, using all available threads at any one time. If you have an HPC cluster at hand, it would be much faster to set up a task array job for aligning reads manually ([HISAT2 or BOWTIE2 commands](#softclipalign)) and then use the BAM files as input for SLIDR
+
 - Tail alignment with BLASTN may be time consuming despite multithreading.
 - Final SL consensus calling in R may require large amounts of RAM if many millions of reads pass filters.
 
-Future updates may support more efficient data structures and automatic HPC job control. SLIDR typically does not need huge amounts of raw data to yield robust results, so consider starting with a small number of libraries.
+SLIDR typically does not need huge amounts of raw data to yield robust results, so consider starting with a small number of libraries.
 
 <a name="slopprguidelines"></a>
 ### SLOPPR
@@ -591,13 +646,17 @@ As above, but use intercistronic distance filtering to designate monocistronic g
 #### I want to analyse hundreds of RNA-Seq libraries - can SLOPPR handle it?
 
 Yes, but be aware of bottlenecks:
-- Read alignment and SL quantification are the most time consuming steps. SLOPPR processes libraries sequentially, using all available threads at any one time. If you have an HPC cluster at hand, it would be much faster to set up a task array job for aligning reads manually (`hisat2 --no-softclip --no-discordant`) and then use the BAM files as input for SLOPPR.
-- SL clustering in R may be time consuming for hundreds of samples
 
-Future updates may support more efficient data structures and automatic HPC job control.
+- SL clustering in R may be time consuming for hundreds of samples
 
 <a name="updates"></a>
 # Update log
+
+## 22/08/2023
+new versions SLIDR 1.2 and SLOPPR 1.2:
+- implemented automatic HPC job submission (defaults to SLURM, but submit commands can be customised)
+- SLIDR: SLTS site GFF now includes numbers of SL reads supporting each site
+- SLIDR: simplified RNAfold output reports
 
 ## 21/01/2022
 new version SLIDR 1.1.6: fixed error when reading empty columns with data.table

@@ -25,8 +25,9 @@ R2=${7/-var=/}
 clean=${8/-var=/}
 bam=${9/-var=/}
 
-# all file paths are already verified by parent script
-#echo "Have received: threads=$threads outdir=$outdir lib=$lib stranded=$stranded R1=$R1 R2=$R2 clean=$clean bam=$bam"
+# all file paths have already been verified by parent script
+# debug:
+# echo "Have received: threads=$threads outdir=$outdir lib=$lib stranded=$stranded R1=$R1 R2=$R2 clean=$clean bam=$bam"
 
 ##########################
 ## function definitions ##
@@ -69,9 +70,9 @@ function genome_align {
 		else
 			hisat_options+="-1 $R1 -2 $R2"
 		fi
-		hisat2 --sp 1,0 --mp 3,1 --score-min L,5,$(echo "$tscale" | awk '{print -0.4*$0}') \
+		hisat2 --sp 1,0 --mp 3,1 -k 5 --score-min L,5,$(echo "$tscale" | awk '{print -0.4*$0}') \
 			-x $outdir/hisat2_index/genome $hisat_options -p $threads 2> $outbam.log_hisat2.txt \
-			| samtools sort -m 2G -@ $threads -O bam -o $outbam - 2>> $outbam.log_hisat2.txt
+			| samtools sort -m 1G -@ $threads -O bam -o $outbam - 2>> $outbam.log_hisat2.txt
 		samtools flagstat -@ $threads $outbam > $outbam.flagstat
 		samtools index -@ $threads -b $outbam
 		echo "$(timestamp) $(grep 'overall alignment rate' $outbam.log_hisat2.txt)"
@@ -89,21 +90,24 @@ function transcriptome_align {
 		fi
 		bowtie2 --local --score-min L,5,$(echo "$tscale" | awk '{print 1-($0*0.4)}') --ma 1 --mp 3,1 -k 5 \
 			-x $outdir/bowtie2_index/transcriptome $bowtie_options -p $threads 2> $outbam.log_bowtie2.txt \
-			| samtools sort -m 3G -@ $threads -O bam -o $outbam - 2>> $outbam.log_bowtie2.txt
+			| samtools sort -m 1G -@ $threads -O bam -o $outbam - 2>> $outbam.log_bowtie2.txt
 		samtools flagstat -@ $threads $outbam > $outbam.flagstat
 		samtools index -@ $threads -b $outbam
 		echo "$(timestamp) $(grep 'overall alignment rate' $outbam.log_bowtie2.txt)"
 	fi
 }
 
+
 function infer_strandedness {
-	if [[ ! "$stranded" =~ [012] ]]; then
-		if [ -f $outbam.strandedness.txt ]; then
-			stranded=$(cat $outbam.strandedness.txt)
-		else
+	# strandedness may already exist 
+	if [ -f $outbam.strandedness.txt ]; then
+		stranded=$(cat $outbam.strandedness.txt)
+	else
+		# strandedness must be inferred only if no strandedness is given
+		if [[ ! "$stranded" =~ [012] ]]; then
 			# infer strandedness if annotations are available
 			# otherwise, strandedness must be 0
-			ann="$outdir/annotations.gtf"
+			ann="$outdir/annotations.gtf.genes"
 			if [ ! -f "$ann" ]; then
 				stranded=0
 			else
@@ -114,13 +118,13 @@ function infer_strandedness {
 					stranded=0
 				else
 					# + strand
-					gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="+"' $ann \
+					gtfsample=$(awk '$7=="+"' $ann \
 						| bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 1000 -i -)
 					pR1=$(echo "$gtfsample" | samtools view -c -F 20 -f 64 -M -L - $bam)
 					pR2=$(echo "$gtfsample" | samtools view -c -F 20 -f 128 -M -L - $bam)
 
 					# - strand
-					gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="-"' $ann \
+					gtfsample=$(awk '$7=="-"' $ann \
 						| bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 1000 -i -)
 					mR1=$(echo "$gtfsample" | samtools view -c -F 4 -f 80 -M -L - $bam)
 					mR2=$(echo "$gtfsample" | samtools view -c -F 4 -f 144 -M -L - $bam)
@@ -137,11 +141,12 @@ function infer_strandedness {
 						sR2=$((100*R2/(R1+R2)))
 						stranded=$(( 1 + 2*(sR1<=30) - (sR1<=70)))
 					fi
+					
 				fi
 			fi
-			echo "$stranded" > $outbam.strandedness.txt			
+			echo "$(timestamp) Inferred library strandedness: $stranded"
 		fi
-		echo "$(timestamp) Inferred library strandedness: $stranded"
+		echo "$stranded" > $outbam.strandedness.txt			
 	fi
 }
 
@@ -157,7 +162,7 @@ function tail_extract {
 
 	### fwd-stranded data (-r 1):	As above, but swap R1 and R2
 
-	### unstranded data (-r 0): 	No distinction between R1 and R2
+	### unstranded data (-r 0) and single-end reads: 	No distinction between R1 and R2
 	#
 	# mapped to + strand: -F 20			take 5' tail from read (10S90M)
 	# mapped to - strand: -F 4 -f 16	take 5' tail from read (rev compl) (90M10S)

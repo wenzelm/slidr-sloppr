@@ -10,19 +10,16 @@ function load_dependencies {
 	# MODIFY/DELETE THESE CALLS ACCORDING TO YOUR MACHINE
 	echo -e "#\n$(timestamp) >>> Loading dependencies"
 	export PATH="$PATH:~/sharedscratch/apps/ViennaRNA-2.4.14/bin"
-	export PATH=$PATH:~/sharedscratch/slidr/toy/vsearch-2.15.1/bin/
-	module load hisat2-2.1.0
-	module load samtools-1.9
-	module load bedtools-2.28.0
-	module load seqtk-1.3
-	module load blast-2.9.0
-	module load r-data.table
-	module load gffread-0.11.4
-	module load cutadapt-2.3
-	module load bowtie2-2.3.5
+	export PATH="$PATH:~/sharedscratch/apps"
+	export PATH="$PATH:~/sharedscratch/apps/hisat2-2.2.1/"
+	module load samtools
+	module load blast-plus
+	module load r
+	module load cutadapt
+	module load bowtie2
 }
 
-title="#\n# SLIDR - Spliced Leader IDentification from RNA-Seq data\n# Version 1.1.6\n#"
+title="#\n# ***********************************************************\n# * SLIDR - Spliced Leader IDentification from RNA-Seq data *\n# * Version 1.2                                             *\n# ***********************************************************\n#"
 
 function printhelp {
 	echo -e "$title"
@@ -30,41 +27,47 @@ function printhelp {
 	echo -e "#   \t\t  {-1 <> [-2 <>] | -b <> | -m <>} [-r 0|1|2|x] [-q]"
 	echo -e "#   \t\t  [-l <>] [-x <>] [-e <>] [-D <>] [-S <>] [-A <>] [-R <>] [-O <>] [-L <>]"
 	echo -e "#\n# General options:"
-	echo -e '#    -o <dir>\tPath to output directory (default: "SLIDR_[date+time]")'
-	echo -e '#    -p <chr>\tPrefix for predicted SL sequences (default: SL)'
-	echo -e '#    -c <num>\tThreads (default: all available cores)'
-	echo -e '#    -T <num>\tTEMP directory (default: $TMPDIR)'
-	echo -e '#    -h\t\tPrint this help page'
+	echo -e '#    -h            Print this help page'
+	echo -e '#    -o <dir>      Path to output directory (default: "SLIDR_[date+time]")'
+	echo -e '#    -p <chr>      Name prefix for predicted SL sequences (default: SL)'
+	echo -e '#    -c <num>      CPU threads (default: 8)'
+	echo -e '#    --tmp <dir>   TEMP directory (default: $TMPDIR)'
+	echo -e '#    --hpc         Run on HPC with automatic job submission'
+	echo -e '#    --hpcp <chr>  HPC submit command for parallel jobs (one job per library)'
+	echo -e '#                  (default: "sbatch -c <threads> --mem <threads*4G> --parsable")'
+	echo -e '#    --hpcd <chr>  HPC submit command for final dependent job'
+	echo -e '#                  (default: "sbatch -c <threads> --mem <threads*8G> -d afterok:")'
+	echo -e '#    --hpcs <chr>  Separator for job IDs in job dependency option (default: ":")'
 	echo -e "#\n# Reference assembly:"
-	echo -e '#    -g <file>\tPath to genome assembly (FASTA[.gz])'
-	echo -e '#    -a <file>\tPath to genome annotations (GFF/GTF[.gz])'
-	echo -e '#    -t <file>\tPath to transcriptome assembly (FASTA[.gz])'
+	echo -e '#    -g <file>     Path to genome assembly (FASTA[.gz])'
+	echo -e '#    -a <file>     Path to genome annotations (GFF/GTF[.gz])'
+	echo -e '#    -t <file>     Path to transcriptome assembly (FASTA[.gz])'
 	echo -e "#\n# Single RNA-Seq library:"
-	echo -e '#    -1 <file>\tPath to R1 reads (FASTQ[.gz])'
-	echo -e '#    -2 <file>\tPath to R2 reads (FASTQ[.gz])'
-	echo -e '#    -b <file>\tPath to read alignments (BAM)'
-	echo -e '#    -r <num>\tRead strandedness (0=unstranded; 1=stranded; 2=reverse-stranded; x=infer; default: x)'
-	echo -e "#    -q\t\tQuality-trim 3' ends of reads and remove Illumina adapters"
+	echo -e '#    -1 <file>     Path to R1 reads (FASTQ[.gz])'
+	echo -e '#    -2 <file>     Path to R2 reads (FASTQ[.gz])'
+	echo -e '#    -b <file>     Path to read alignments (BAM)'
+	echo -e '#    -r <num>      Read strandedness (0=unstranded; 1=stranded; 2=reverse-stranded; x=infer; default: x)'
+	echo -e "#    -q            Quality-trim 3' ends of reads and remove Illumina adapters"
 	echo -e "#\n# Multiple RNA-Seq libraries:"
-	echo -e '#    -m <file>\tPath to tab-delimited file describing library configurations:'
-	echo -e '#   \t\tColumn 1: Library name'
-	echo -e '#   \t\tColumn 2: Library strandedness (= -r option)'
-	echo -e '#   \t\tColumn 3: Path to R1 reads (= -1 option)'
-	echo -e '#   \t\tColumn 4: Path to R2 reads (= -2 option)'
-	echo -e '#   \t\tColumn 5: "trim" to quality-trim reads (= -q option)'
-	echo -e '#   \t\tColumn 6: Path to read alignments (= -b option)'
+	echo -e '#    -m <file>     Path to tab-delimited file describing library configurations:'
+	echo -e '#                  Column 1: Library name'
+	echo -e '#                  Column 2: Read strandedness (= -r option)'
+	echo -e '#                  Column 3: Path to R1 reads (= -1 option)'
+	echo -e '#                  Column 4: Path to R2 reads (= -2 option)'
+	echo -e '#                  Column 5: "trim" to quality-trim reads (= -q option)'
+	echo -e '#                  Column 6: Path to read alignments (= -b option)'
 	echo -e "#\n# Read tail clustering:"
-	echo -e "#    -l <num>\tMinimum tail length (default: 8)"
-	echo -e "#    -x <num>\tScale factor for upper tail length limit (default: 1.0)"
-	echo -e "#    --agc \tUse abundance-based greedy clustering (default: use DGC)"
+	echo -e "#    -l <num>      Minimum tail length (default: 8)"
+	echo -e "#    -x <num>      Scale factor for upper tail length limit (default: 1.0)"
+	echo -e "#    --agc         Use abundance-based greedy clustering (default: use DGC)"
 	echo -e "#\n# SL RNA filtering:"
-	echo -e "#    -e <num>\tBLASTN E-value (default: 1)"
-	echo -e "#    -D <chr>\tSplice donor site regex (default: GT)"
-	echo -e "#    -S <chr>\tSm binding site regex (default: .{20,60}AT{4,6}G)"
-	echo -e "#    -A <chr>\tSplice acceptor site regex (default: AG)"
-	echo -e "#    -R <num>\tMaximum SL RNA length excluding SL (default: 80)"
-	echo -e "#    -O <num>\tMaximum SL overlap with trans-splice acceptor site (default: 10)"
-	echo -e "#    -L <num>\tMaximum base-pair span within stem-loop (default: 35)"
+	echo -e "#    -e <num>      BLASTN E-value (default: 1)"
+	echo -e "#    -D <chr>      Splice donor site regex (default: 'GT')"
+	echo -e "#    -A <chr>      Splice acceptor site regex (default: 'AG')"
+	echo -e "#    -S <chr>      Sm binding site regex (default: '.{20,60}AT{4,6}G')"
+	echo -e "#    -R <num>      Maximum SL RNA length excluding SL (default: 80)"
+	echo -e "#    -O <num>      Maximum SL overlap with trans-splice acceptor site (default: 10)"
+	echo -e "#    -L <num>      Maximum base-pair span within stem-loop (default: 35)"
 	echo -e "#"
 }
 
@@ -80,9 +83,10 @@ fi
 
 # default parameters
 outdir="SLIDR_$(date +"%Y-%m-%d_%H-%M-%S")"
-threads=$(nproc)
+threads=8 # $(nproc)
 stranded="x"
 clean="no"
+tcull="no"
 tlength=8
 tscale=1.0
 agc="DGC"
@@ -94,6 +98,13 @@ rlength=80
 overlap=10
 sloop=35
 slprefix="SL"
+# HPC control
+hpc="no"
+plocal=""
+hpc_submit=""
+hpc_depend=""
+hpc_sep=":"
+jobdeps=""
 
 # parse command-line options
 cmdline="slidr.sh"
@@ -113,6 +124,9 @@ do
 		-t)		transcriptome=$2
 				cmdline+=" -t $2"
 		shift; shift;;
+		-T)		tcull="yes"
+				cmdline+=" -T"
+		shift;;
 	    -1)		R1=$2
 				cmdline+=" -1 $2"
 		shift; shift;;
@@ -163,7 +177,7 @@ do
 				cmdline+=" -L $2"
 		shift; shift;;
 		-o)		outdir=$2
-				cmdline+=" -o $2"
+				cmdline+=" -o '$2'"
 		shift; shift;;
 		-p)		slprefix=$2
 				cmdline+=" -p $2"
@@ -171,13 +185,50 @@ do
 	    -c)		threads=$2
 				cmdline+=" -c $2"
 		shift; shift;;
-		-T)		export TMPDIR=$2
-				cmdline+=" -T $2"
+		--tmp)	export TMPDIR=$2
+				cmdline+=" --tmp $2"
+		shift; shift;;
+		--hpc)	hpc="yes"
+				cmdline+=" --hpc"
+		shift;;
+		--local)	plocal="yes"		# override hpc submission for final part of pipeline
+		shift;;
+		--hpcp)
+				hpc="yes"
+				hpc_submit=$2
+				cmdline+=" --hpcp '$2'"
+		shift; shift;;
+		--hpcd)
+				hpc="yes"
+				hpc_depend=$2
+				cmdline+=" --hpcd '$2'"
+		shift; shift;;
+		--hpcs)
+				hpc="yes"
+				hpc_sep=$2
+				cmdline+=" --hpcs '$2'"
 		shift; shift;;
 	    -)	            # unknown option
 		shift; shift;;
 	esac
 done
+
+# HPC control
+
+# ensure that automatic output directory is passed on
+if [[ ! "$cmdline" =~ " -o " ]]; then 
+		cmdline+=" -o '$outdir'"
+fi
+
+# if HPC is requested but submit command is omitted, use default SLURM command
+if [ "$hpc" == "yes" ] && [ "$hpc_submit" == "" ]; then
+	hpc_submit="sbatch -c $threads --mem $(($threads*4))G --parsable"
+fi
+# same for job dependency command
+# if HPC is requested but submit command is omitted, use default SLURM command
+if [ "$hpc" == "yes" ] && [ "$hpc_depend" == "" ]; then
+	hpc_depend="sbatch -c $threads --mem $(($threads*8))G -d afterok:"
+fi
 
 # print input summary on screen and log file
 function print_summary {
@@ -187,19 +238,23 @@ function print_summary {
 	echo -e "#   > SL name prefix\t $slprefix"
 	echo -e "#   > Threads\t\t $threads"
 	echo -e "#   > TEMP directory\t $TMPDIR"
+	if [ "$hpc" == "yes" ]; then
+		echo -e "#   > HPC parallel\t $hpc_submit"
+		echo -e "#   > HPC sequential\t $hpc_depend"
+	fi
 	echo -e "#\n# Reference:"
 	echo -e "#   > Genome\t\t $genome"
 	echo -e "#   > Annotations\t $ann"
 	echo -e "#   > Transcriptome\t $transcriptome"
 	echo -e "#\n# Read tail clustering:"
 	echo -e "#   > Minimum length\t $tlength"
-	echo -e "#   > Maximum length\t $tscale"
+	echo -e "#   > Maximum length\t ${tscale}X"
 	echo -e "#   > Clustering mode\t $agc"
 	echo -e "#\n# SL RNA filtering:"
 	echo -e "#   > BLASTN E-value\t $evalue"
 	echo -e "#   > Splice donor\t $donor"
-	echo -e "#   > Sm binding site\t $sm"
 	echo -e "#   > Splice acceptor\t $acceptor"
+	echo -e "#   > Sm binding site\t $sm"
 	echo -e "#   > SL RNA length\t $rlength"
 	echo -e "#   > Acceptor overlap\t $overlap"
 	echo -e "#   > Stem-loop span\t $sloop"
@@ -226,7 +281,7 @@ function sanity_check {
 	# if transcriptome is supplied, splice acceptor site must be empty
 	if [ ! "$transcriptome" == "" ]; then
 		if [ ! "$acceptor" == "" ]; then
-			echo "WARNING: Splice acceptor sites cannot be identified in a transcriptome reference."
+			echo "WARNING: Splice acceptor sites cannot be identified in a transcriptome reference. Removing splice acceptor motif."
 		fi
 		if [ "$overlap" -gt 0 ]; then
 			echo "WARNING: It is recommended to set trans-splice acceptor overlap to 0 when using a transcriptome reference."
@@ -302,296 +357,149 @@ print_summary >> "$outdir/0-command_summary.txt"
 #
 # 1) PREPARE GENOME/TRANSCRIPTOME INDEX
 #
-echo "$(timestamp) >>> STAGE 1: Read tail clustering"
+echo "$(timestamp) >>> STAGE 1: SL read identification"
 
 if [ ! "$genome" == "" ]; then
-	ref=$genome
+	ref="$genome"
 elif [ ! "$transcriptome" == "" ]; then
-	ref=$transcriptome
+	ref="$transcriptome"
 fi
 
 # copy genome/transcriptome
 # unzip if required
-if [ ! -f $outdir/reference.fa ]; then
+if [ ! -f "$outdir/reference.fa" ]; then
 	if [ "$(file $ref | grep -i gzip)" ]; then
-		gunzip -c $ref > $outdir/reference.fa
+		gunzip -c "$ref" > "$outdir/reference.fa"
 	else
-		cp $ref $outdir/reference.fa
+		cp "$ref" "$outdir/reference.fa"
 	fi
 fi
-ref=$outdir/reference.fa
+ref="$outdir/reference.fa"
 
 # copy annotations
 # unzip if required
 # convert GFF to GTF if required
 if [ ! "$ann" == "" ]; then
 	gtf="$outdir/annotations.gtf"
-	if [ ! -f $gtf ]; then
-		echo "$(timestamp) Processing annotations ..."
-		gropts="--force-exons --gene2exon --keep-genes -M -K -Q -C -T"
+	if [ ! -f "$gtf" ]; then
+		echo "$(timestamp) Processing genome annotations ..."
+		gropts="--force-exons --gene2exon --keep-genes -T"
 		fform="$(file $ann)"
 		if [[ "$fform" =~ "gzip" ]] && [[ "$fform" =~ ".gtf" ]]; then
 			# gzipped GTF
-			gunzip -c $ann > $gtf
+			gunzip -c "$ann" > "$gtf"
 		elif [[ "$fform" =~ "gzip" ]] && [[ ! "$fform" =~ ".gtf" ]]; then
 			# gzipped GFF
-			gunzip -c $ann | gffread $gropts -o $gtf
+			gunzip -c "$ann" | gffread $gropts -o "$gtf"
 		elif [[ ! "$fform" =~ "gzip" ]] && [[ "$fform" =~ ".gtf" ]]; then
 			# unzipped GTF
-			cp $ann $gtf
+			cp "$ann" "$gtf"
 		else
 			# unzipped GFF
-			gffread $ann $gropts -o $gtf
+			gffread "$ann" $gropts -o "$gtf"
 		fi
 	fi
-	ann=$gtf
+	ann="$gtf"
+	bedtools sort -i "$ann" | awk '$3~"transcript|gene|mRNA"' > "$ann.genes"
 fi
 
 # make hisat2 index for genome
-if [ ! "$genome" == "" ] && [ ! -d $outdir/hisat2_index ]; then
+if [ ! "$genome" == "" ] && [ ! -d "$outdir/hisat2_index" ]; then
 	echo "$(timestamp) Generating HISAT2 index ..."
-	mkdir -p $outdir/hisat2_index
+	mkdir -p "$outdir/hisat2_index"
 	# if we have genome annotations, use them
 	if [ ! "$ann" == "" ]; then
 		# extract splice sites for hisat2
-		hisat2_extract_splice_sites.py $ann > $outdir/hisat2_index/hisat2_splicesites.txt
-		hisat2_extract_exons.py $ann > $outdir/hisat2_index/hisat2_exons.txt
-		if [ -s $outdir/hisat2_index/hisat2_splicesites.txt ] && [ -s $outdir/hisat2_index/hisat2_exons.txt ]; then
+		hisat2_extract_splice_sites.py "$ann" > "$outdir/hisat2_index/hisat2_splicesites.txt"
+		hisat2_extract_exons.py "$ann" > "$outdir/hisat2_index/hisat2_exons.txt"
+		if [ -s "$outdir/hisat2_index/hisat2_splicesites.txt" ] && [ -s "$outdir/hisat2_index/hisat2_exons.txt" ]; then
 			hisatgffopts+="--ss $outdir/hisat2_index/hisat2_splicesites.txt --exon $outdir/hisat2_index/hisat2_exons.txt"
 		fi
 	fi
-	hisat2-build -p $threads $hisatgffopts $ref $outdir/hisat2_index/genome \
-		> $outdir/hisat2_index/log_hisat2-build.txt 2>&1
+	hisat2-build -p $threads $hisatgffopts "$ref" "$outdir/hisat2_index/genome" \
+		> "$outdir/hisat2_index/log_hisat2-build.txt" 2>&1
 fi
+
+
+#
+# IMPLEMENT TRANSCRIPTOME CULLING HERE
+#
+
 # make bowtie2 index for transcriptome
-if [ ! "$transcriptome" == "" ] && [ ! -d $outdir/bowtie2_index ]; then
+if [ ! "$transcriptome" == "" ] && [ ! -d "$outdir/bowtie2_index" ]; then
 	echo "$(timestamp) Generating BOWTIE2 index ..."
-	mkdir -p $outdir/bowtie2_index
+	mkdir -p "$outdir/bowtie2_index"
 	bowtie2-build --threads $threads \
-		$ref $outdir/bowtie2_index/transcriptome \
-		> $outdir/bowtie2_index/log_bowtie2-build.txt 2>&1
+		"$ref" "$outdir/bowtie2_index/transcriptome" \
+		> "$outdir/bowtie2_index/log_bowtie2-build.txt" 2>&1
 fi
 
-#
-# 2) GENOME/TRANSCRIPTOME ALIGNMENT
-#
-# only when no BAM file was specified!
-
-function trim_reads {
-	trR1=$outdir/$lib/${lib/1-library_/}.R1.trimmed.fq.gz
-	trR2=$outdir/$lib/${lib/1-library_/}.R2.trimmed.fq.gz
-	if [ "$clean" == "trim" ] && [ ! -f $trR1 ]; then
-		echo "$(timestamp) Trimming adapters and poor-quality bases from reads ..."
-		if [ "$R2" == "" ]; then
-			# single-end data
-			raw=$R1
-			R1=$trR1
-			cutadapt -a AGATCGGAAGAGC -q 20 -m 20 \
-				-o $R1 -j $threads $raw \
-				> $outdir/$lib/log_cutadapt.txt 2>&1
-		else
-			# paired-end data
-			raw1=$R1
-			raw2=$R2
-			R1=$trR1
-			R2=$trR2
-			cutadapt -a AGATCGGAAGAGC -A AGATCGGAAGAGC -q 20 -m 20 \
-				-o $R1 -p $R2 -j $threads $raw1 $raw2 \
-				> $outdir/$lib/log_cutadapt.txt 2>&1
-		fi
-	fi
-}
-
-function genome_align {
-	if [ ! -f $outbam ]; then
-		echo "$(timestamp) Aligning reads to genome ..."
-		hisat_options=""
-		if [ "$R2" == "" ]; then
-			hisat_options+="-U $R1"
-		else
-			hisat_options+="-1 $R1 -2 $R2"
-		fi
-		hisat2 --sp 1,0 --mp 3,1 --score-min L,5,$(echo "$tscale" | awk '{print -0.4*$0}') \
-			-x $outdir/hisat2_index/genome $hisat_options -p $threads 2> $outbam.log_hisat2.txt \
-			| samtools sort -O bam -@ $threads -o $outbam - 2>> $outbam.log_hisat2.txt
-		samtools flagstat $outbam > $outbam.flagstat
-		samtools index -@ $threads -b $outbam
-		echo "$(timestamp) $(grep 'overall alignment rate' $outbam.log_hisat2.txt)"
-	fi
-}
-
-function transcriptome_align {
-	if [ ! -f $outbam ]; then
-		echo "$(timestamp) Aligning reads to transcriptome ..."
-		bowtie_options=""
-		if [ "$R2" == "" ]; then
-			bowtie_options+="-U $R1"
-		else
-			bowtie_options+="-1 $R1 -2 $R2"
-		fi
-		bowtie2 --local --score-min L,5,$(echo "$tscale" | awk '{print 1-($0*0.4)}') --ma 1 --mp 3,1 -k 5 \
-			-x $outdir/bowtie2_index/transcriptome $bowtie_options -p $threads 2> $outbam.log_bowtie2.txt \
-			| samtools sort -O bam -@ $threads -o $outbam - 2>> $outbam.log_bowtie2.txt
-		samtools flagstat $outbam > $outbam.flagstat
-		samtools index -@ $threads -b $outbam
-		echo "$(timestamp) $(grep 'overall alignment rate' $outbam.log_bowtie2.txt)"
-	fi
-}
-
-#
-# 3) TAIL EXTRACTION
-#
-
-function infer_strandedness {
-	if [[ ! "$stranded" =~ [012] ]]; then
-		if [ -f $outbam.strandedness.txt ]; then
-			stranded=$(cat $outbam.strandedness.txt)
-		else
-			# infer strandedness if annotations are available
-			# otherwise, strandedness must be 0
-			if [ "$ann" == "" ]; then
-				stranded=0
-			else
-				# check if we have single-end reads:
-				# if so, must treat like unstranded data
-				npe=$({ samtools view -H $bam ; samtools view $bam | head -n 10000; } | samtools view -c -f 1 -)
-				if [ "$npe" == "0" ]; then
-					stranded=0
-				else
-					# + strand
-					gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="+"' $ann \
-						| bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 1000 -i -)
-					pR1=$(echo "$gtfsample" | samtools view -c -F 20 -f 64 -M -L - $bam)
-					pR2=$(echo "$gtfsample" | samtools view -c -F 20 -f 128 -M -L - $bam)
-
-					# - strand
-					gtfsample=$(awk '$3~"transcript|gene|mRNA" && $7=="-"' $ann \
-						| bedtools sort -i - | bedtools merge -s -i - | bedtools sample -n 1000 -i -)
-					mR1=$(echo "$gtfsample" | samtools view -c -F 4 -f 80 -M -L - $bam)
-					mR2=$(echo "$gtfsample" | samtools view -c -F 4 -f 144 -M -L - $bam)
-
-					# summarise
-					R1=$((pR1+mR1))
-					R2=$((pR2+mR2))
-					if [ $((R1+R2)) == 0 ]; then
-						# double-check for single-end data; must be analysed as unstranded
-						stranded=0
-					else
-						# need at least 30:70 bias to infer as stranded
-						sR1=$((100*R1/(R1+R2)))
-						sR2=$((100*R2/(R1+R2)))
-						stranded=$(( 1 + 2*(sR1<=30) - (sR1<=70)))
-					fi
-				fi
-			fi
-			echo "$stranded" > $outbam.strandedness.txt			
-		fi
-		echo "$(timestamp) Inferred library strandedness: $stranded"
-	fi
-}
-
-function tail_extract {
-	### rev-stranded data (-r 2):	R2 are from 5' end of transcript
-	###								R1 are only useful if the fragment is short;
-	###								the 3' end of R1 can then read into the rev compl of the SL
-	#
-	# mapped to + strand: -F 20			R2: -f 128		take 5' tail from read (10S90M)
-	# mapped to - strand: -F 4 -f 16	R2: -f 128		take 5' tail from read (rev compl) (90M10S)
-	# mapped to + strand: -F 20			R1: -f 64		take 3' tail from read (rev compl) (90M10S)
-	# mapped to - strand: -F 4 -f 16	R1: -f 64		take 3' tail from read (10S90M)
-
-	### fwd-stranded data (-r 1):	As above, but swap R1 and R2
-
-	### unstranded data (-r 0): 	No distinction between R1 and R2
-	#
-	# mapped to + strand: -F 20			take 5' tail from read (10S90M)
-	# mapped to - strand: -F 4 -f 16	take 5' tail from read (rev compl) (90M10S)
-	# mapped to + strand: -F 20			take 3' tail from read (rev compl) (90M10S)
-	# mapped to - strand: -F 4 -f 16	take 3' tail from read (10S90M)
-	
-	# we want to keep secondary alignments
-	# could be changed to ignore secondary alignments:
-	# -F 276 instead of -F 20
-	# -F 260 instead of -F 4
-	
-	echo "$(timestamp) Extracting soft-clipped tails from alignments ..."
-
-	{ if [ ! -f "$outbam.tails+5p.fa.gz" ]; then
-		samtools view -H $bam > "$outbam.tails+5p.sam"
-		samtools view -F 20 -f $((0+ (64*$stranded))) $bam \
-			| awk '$6 ~ "^[0-9]*S"{$1="aln+5p"NR"_"$1; print}' OFS="\t" | tee -a $outbam.tails+5p.sam \
-			| awk '{gsub("S.*", "", $6); t=substr($10,1,$6); print ">"$1"\n"t}' \
-			| seqtk seq -U > "$outbam.tails+5p.fa"
-		gzip $outbam.tails+5p.sam
-		gzip $outbam.tails+5p.fa
-	fi; } &
-	{ if [ ! -f "$outbam.tails-5p.fa.gz" ]; then
-		samtools view -H $bam > "$outbam.tails-5p.sam"	
-		samtools view -F 4 -f $((16+ (64*$stranded))) $bam \
-			| awk '$6 ~ "[0-9]*S$"{$1="aln-5p"NR"_"$1; print}' OFS="\t" | tee -a $outbam.tails-5p.sam \
-			| awk '{gsub("S", "", $6); gsub(".*[A-Z]", "", $6); 
-				t=substr($10,length($10)+1-$6,$6); print ">"$1"\n"t}' \
-			| seqtk seq -Ur > "$outbam.tails-5p.fa"
-		gzip $outbam.tails-5p.sam
-		gzip $outbam.tails-5p.fa
-	fi; } &		
-	{ if [ ! -f "$outbam.tails+3p.fa.gz" ]; then	
-		samtools view -H $bam > "$outbam.tails+3p.sam"
-		samtools view -F 20 -f $((0+ (192-64*$stranded)*($stranded>0))) $bam \
-			| awk '$6 ~ "[0-9]*S$"{$1="aln+3p"NR"_"$1; print}' OFS="\t" | tee -a $outbam.tails+3p.sam \
-			| awk '{gsub("S", "", $6); gsub(".*[A-Z]", "", $6); 
-				t=substr($10,length($10)+1-$6,$6); print ">"$1"\n"t}' \
-			| seqtk seq -Ur > "$outbam.tails+3p.fa"
-		gzip $outbam.tails+3p.sam
-		gzip $outbam.tails+3p.fa
-	fi; } &
-	{ if [ ! -f "$outbam.tails-3p.fa.gz" ]; then
-		samtools view -H $bam > "$outbam.tails-3p.sam"
-		samtools view -F 4 -f $((16+ (192-64*$stranded)*($stranded>0))) $bam \
-			| awk '$6 ~ "^[0-9]*S"{$1="aln-3p"NR"_"$1; print}' OFS="\t" | tee -a $outbam.tails-3p.sam \
-			| awk '{gsub("S.*", "", $6); t=substr($10,1,$6); print ">"$1"\n"t}' \
-			| seqtk seq -U > "$outbam.tails-3p.fa"
-		gzip $outbam.tails-3p.sam
-		gzip $outbam.tails-3p.fa
-	fi; } & wait	
-	echo "$(timestamp) Extracted $(zgrep -h '^>' $outbam.tails*p.fa.gz | grep -c '^>') tails"
-}
 
 # we need to extract tails for each library
 # if a library-design file is specified, loop through libraries
 # for each library, check what needs done
+# new: check whether library.OK file exists. If not, submit job to check what needs done
+
 function library_pipeline {
 	echo "$(timestamp) >>> Processing library $lib"
-		lib="1-library_$lib"
-		outbam="$outdir/$lib/alignments-x$tscale.bam"
-		mkdir -p $outdir/$lib
-		if [ "$bam" == "" ]; then
-			trim_reads
-			if [ ! "$genome" == "" ]; then
-				genome_align
-			elif [ ! "$transcriptome" == "" ]; then
-				transcriptome_align
-			fi
-			bam=$outbam
+	lib="1-library_$lib"
+	# does library.OK file exist? If yes, library has already been processed
+	if [ -f "$outdir/$lib/library-x$tscale.OK" ]; then 
+		echo "$(timestamp) >>> Nothing to do"
+	else
+		# process via HPC or local
+		if [ "$hpc" == "yes" ]; then
+			# HPC
+			jobID=$(eval "$hpc_submit slidr_library.sh -var=\"$threads\" -var=\"$outdir\" -var=\"$lib\" -var=\"$stranded\" -var=\"$tscale\" -var=\"$R1\" -var=\"$R2\" -var=\"$clean\" -var=\"$bam\"")
+			echo "$(timestamp) >>> Submitted HPC job $jobID"
+			jobdeps+="$jobID$hpc_sep"
+		else
+			# local
+			slidr_library.sh -var="$threads" -var="$outdir" -var="$lib" -var="$stranded" -var="$tscale" -var="$R1" -var="$R2" -var="$clean" -var="$bam"
 		fi
-		infer_strandedness
-		tail_extract
+	fi
 }
+
 if [ ! "$design" == "" ]; then
 	while IFS='#' read lib stranded R1 R2 clean bam
 	do
 		library_pipeline
-	done < <(tr -d '#' < $design | tr '\t' '#' )
+	done < <(tr -d '#' < "$design" | tr '\t' '#')
 	else
 		# just do it once
 		lib="data"
 		library_pipeline
 fi
 
+### from here on, everything will be done on all libraries together
+# if HPC was not used, all libraries will be done and we can continue straight away
+# if HPC was used, it's complicated
+# if at least one library was submitted, we'll have to wait until that job is finished
+# if no libraries were submitted, we are ready 
+
+if [ "$hpc" == "yes" ] && [ ! "$plocal" == "yes" ]; then
+	# submit self and exit
+	# check if dependencies are empty; in that case we don't need them!
+	# the dependency command will then just get a dummy job ID (1 for SLURM)
+	jobdeps=${jobdeps%$hpc_sep}
+	if [ "$jobdeps" == "" ]; then
+		jobdeps="1"
+	else
+		echo "$(timestamp) >>> Pipeline will continue once HPC jobs $jobdeps have finished"
+	fi
+	eval "${hpc_depend}${jobdeps} $cmdline --local"
+	echo "$(timestamp) >>> Submitted current run to HPC. Exiting."
+	exit 0
+fi
+
+# continue rest of pipeline as normal
+
+echo "$(timestamp) >>> STAGE 2: SL tail clustering"
+
 #
 # 4) TAIL CLUSTERING
 #
-### from now on, everything will be done on all libraries together
+
 mkdir -p $outdir/1-tails
 
 # collect all tails
@@ -637,7 +545,7 @@ if [ ! -f $clusterprefix.centroids.fa.gz ]; then
 	gunzip -c $tailprefix.derep.fa.gz \
 	| vsearch --cluster_fast - --qmask none \
 		--uc $clusterprefix.out --centroids $clusterprefix.centroids.fa \
-		--msaout $clusterprefix.msa.fa \
+		--consout $clusterprefix.consensus.fa --msaout $clusterprefix.msa.fa \
 		--clusterout_sort --sizein --sizeout \
 		--minseqlength $tlength --threads $threads \
 		--id 1.0 --iddef 0 --rightjust \
@@ -655,7 +563,7 @@ if [ ! -f $clusterprefix.centroids.fa.gz ]; then
 	gzip $clusterprefix.centroids.fa
 	gzip $clusterprefix.msa.fa
 	
-	echo "$(timestamp) Identified $(zgrep -c '^>' $clusterprefix.centroids.fa.gz) tail clusters"
+	echo "$(timestamp) Generated $(zgrep -c '^>' $clusterprefix.centroids.fa.gz) tail clusters"
 fi
 
 # summarise read information from derep and cluster
@@ -671,7 +579,7 @@ fi
 #
 # 5) TAIL FILTERING
 #
-echo "$(timestamp) >>> STAGE 2: SL RNA identification"
+echo "$(timestamp) >>> STAGE 3: SL RNA identification"
 mkdir -p $outdir/2-RNA_filters
 # map to the reference
 # ensure that the 3' end of the tail is aligned (5' end can contain noise, so not important) $8==$14
@@ -816,7 +724,7 @@ echo "$(timestamp) Processed $ud unique RNAs"
 #
 # 9) reconstruct 3' end of SL tails and cluster
 #
-echo "$(timestamp) >>> STAGE 3: Consensus SL construction"
+echo "$(timestamp) >>> STAGE 4: Consensus SL construction"
 
 # new: cluster directly from slRNA output. No need to go through all the joining trouble.
 if [ ! -f "$smout.centroids.fa.gz" ]; then
@@ -862,6 +770,36 @@ echo "$rnafout" >> "$resultsdir/filters.fofn"
 echo "$smout.clusterinfo.txt.gz" >> "$resultsdir/filters.fofn"
 
 slidr_consensus.R "$resultsdir" " $acceptor" $slprefix $threads
+
+#
+# 11) Overlap predicted SL RNA genes and SLTS acceptor sites with reference annotations (if available)
+#
+if [ -f "$ann" ]; then
+	echo "$(timestamp) Finding SL RNA genes and trans-spliced genes in reference ..."
+
+	for sl in $(find "$resultsdir" -name "*.RNA_genes.gff3" | sort)
+	do
+		acc=${sl/RNA_genes.gff3/acceptor_sites.gff3}
+		sln=$(basename ${sl/.RNA_genes.gff3/})
+		
+		bedtools intersect -s -wb \
+			-a <(bedtools sort -i "$sl") -b "$ann.genes" \
+			> "$sl.reference.txt"
+	
+		bedtools intersect -s -wb \
+			-a <(bedtools sort -i "$acc" | bedtools slop -r 100 -l 0 -s -i - -g "$ref.fai") -b "$ann.genes" \
+			> "$acc.reference.txt"
+	
+		nslrnap=$(grep -c -v '^#' "$sl")
+		nsltsap=$(grep -c -v '^#' "$acc")
+		nslrna=$(wc -l < "$sl.reference.txt")
+		nsltsa=$(wc -l < "$acc.reference.txt")
+		
+		echo "$(timestamp) Found $nslrna out of $nslrnap ($((100*$nslrna/$nslrnap))%) predicted $sln RNA genes ..."	
+		echo "$(timestamp) Found $nsltsa $sln trans-spliced genes ..."	
+		#echo "$(timestamp) Found $nsltsa out of $nsltsap ($((100*$nsltsa/$nsltsap))%) predicted $sln trans-spliced genes/transcripts ..."	
+	done
+fi
 
 echo "$(timestamp) Finished!"
 

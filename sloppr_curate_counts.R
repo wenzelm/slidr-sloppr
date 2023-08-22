@@ -10,7 +10,8 @@ library(parallel)
 # 4: minimum read threshold
 
 args = commandArgs(trailingOnly=TRUE)
-wdir <- args[1]
+pref <- args[1]
+#wdir <- dir.name(pref)
 threads <- as.numeric(args[2])
 rlen <- as.numeric(args[3])
 thresh <- as.numeric(args[4])
@@ -75,7 +76,9 @@ peak_split <- function(dd){
 		#pos <- which(pr|se)
 		
 		# split at peak positions
-		if(length(pos)>0 && any(pos>2)){	
+		# any(pos>2) is relic - delete?
+		#if(length(pos)>0 && any(pos>2)){	
+		if(length(pos)>0){	
 			sp <- c(pos, nrow(gene)+1)
 			if(pos[1]>1) sp <- c(1, sp)
 			lbl <- rep(paste0("split", 1:(length(sp)-1)), times=c(diff(sp)))
@@ -99,15 +102,23 @@ peak_split <- function(dd){
 	return(genes)
 }
 
+#
+# main pipeline
+#
+
 # background counts and gene-based SL counts need tidying only
-for(fc in c("bg.featureCounts.genes.raw.txt", "un.featureCounts.genes.raw.txt", "SL.featureCounts.genes.raw.txt")){
-	gbc <- loadFC(file.path(wdir, fc))
+SL.raw <- paste0(pref, ".genes.raw.txt")
+res.raw <- file.path(dirname(SL.raw), gsub("SL", "rescued", basename(SL.raw)))
+bg.raw  <- file.path(dirname(SL.raw), gsub("SL.*counts", "bg.counts", basename(SL.raw)))
+for(fc in c(SL.raw, res.raw, bg.raw)){
+	gbc <- loadFC(fc)
 	cat(paste0(fc, ": ", nrow(gbc), " gene records comprising ", length(unique(gbc$Geneid)), " gene IDs ...\n"))
-	write.table(gbc, file.path(wdir, gsub("raw", "clean", fc)), row.names=F, col.names=T, quote=F, sep="\t")
+	write.table(gbc, gsub("raw", "clean", fc), row.names=F, col.names=T, quote=F, sep="\t")
 }
 
 # exon-based counts need tidying and peak correction
-ebc <- loadFC(file.path(wdir, "SL.featureCounts.exons.raw.txt"))
+exons.raw <- gsub(".genes.raw", ".exons.raw", SL.raw)
+ebc <- loadFC(exons.raw)
 ng <- length(unique(ebc$Geneid))
 cat(paste("Processed", nrow(ebc), "exon records comprising", ng, "gene IDs\n"))
 
@@ -115,5 +126,5 @@ ebc <- peak_split(ebc)
 ngn <- length(unique(ebc$Geneid))
 cat(paste0("Gained ", ngn-ng, " gene IDs (", ngn , " total) by splitting at internal exons with SL reads\n"))
 
-write.table(ebc, file.path(wdir, "SL.featureCounts.exons.clean.txt"), row.names=F, col.names=T, quote=F, sep="\t")
+write.table(ebc, gsub("raw", "clean", exons.raw), row.names=F, col.names=T, quote=F, sep="\t")
 

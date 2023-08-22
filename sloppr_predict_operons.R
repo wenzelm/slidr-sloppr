@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-sloppr_version <- "1.1.5"
+sloppr_version <- "1.2"
 
 # this script is designed to predict operons from a featureCount matrix
 
@@ -102,8 +102,9 @@ readFC <- function(f){
   # extract meta information
   meta <- data.frame(ID=colnames(d)[-c(1:6)], stringsAsFactors=F)
   # resolve library names
-  meta$Library <- gsub(".*library_", "", gsub(".fc.bam$", "", meta$ID))
-  for(s in sl) meta$Library <- gsub(paste0(".", s, "$"), "", meta$Library)
+  meta$Library <- gsub(".*library_", "", meta$ID)
+  #meta$Library <- gsub(".*library_", "", gsub(".fc.bam$", "", meta$ID))
+  for(s in sl) meta$Library <- gsub(paste0("\\.", s, "\\.n.*"), "", meta$Library)
   # resolve SL names
   meta$SL <- rep("", times=nrow(meta))
   for(s in sl) meta$SL[grep(paste0(s, "\\."), meta$ID)] <- s
@@ -139,13 +140,16 @@ readFC <- function(f){
   # compute TPM for background counts
   
   # obtain background gene expression levels
-  bg <- read.table(gsub("SL.featureCounts.genes|SL.featureCounts.exons", "bg.featureCounts.genes", f), sep="\t", header=T, stringsAsFactors=F)
-  names(bg) <- gsub(".*library_", "", gsub(".end2end_pre.align.bam$", "", names(bg)))
-  un <- read.table(gsub("SL.featureCounts.genes|SL.featureCounts.exons", "un.featureCounts.genes", f), sep="\t", header=T, stringsAsFactors=F)
-  names(un) <- gsub(".*library_", "", gsub(".untrimmed.bam$", "", names(un)))
-  # add un to bg counts
-  un <- un[match(bg$Geneid, un$Geneid),]
-  bg[-c(1:6)] <- bg[-c(1:6)] + un[-c(1:6)]
+  bgf <- file.path(dirname(f), gsub(".exons.clean", ".genes.clean", gsub("SL.*counts", "bg.counts", basename(f))))
+  bg <- read.table(bgf, sep="\t", header=T, stringsAsFactors=F)
+  names(bg) <- gsub(".*library_", "", gsub("\\.end2end_pre\\.align\\.bam$", "", names(bg)))
+  # obtain rescued read gene expression levels
+  rsf <- file.path(dirname(f), gsub(".exons.clean", ".genes.clean", gsub("SL", "rescued", basename(f))))
+  rescued <- read.table(rsf, sep="\t", header=T, stringsAsFactors=F)
+  names(rescued) <- gsub(".*library_", "", gsub("\\.rescued.*bam$", "", names(rescued)))
+  # add rescued to bg counts
+  rescued <- rescued[match(bg$Geneid, rescued$Geneid),]
+  bg[-c(1:6)] <- bg[-c(1:6)] + rescued[-c(1:6)]
   
   # synchronise both count tables (necessary when using exon-corrected data)
   bg <- bg[match(gsub("_split.*", "", d$Geneid), bg$Geneid),]
@@ -378,7 +382,7 @@ ddf <- rbind(data.frame(Comp="Cluster1-vs-2", Ratio=cts.res$Cluster1v2),
 			data.frame(Comp="Cluster2-vs-1", Ratio=cts.res$Cluster2v1),
 			data.frame(Comp="SL2-vs-SL1", Ratio=cts.res$SL2v1))
 ddf <- subset(ddf, is.finite(Ratio) & Ratio>0)
-ddf$Comp <- factor(ddf$Comp, levels(ddf$Comp)[c(3,1,2)])
+ddf$Comp <- factor(ddf$Comp, levels=c("SL2-vs-SL1", "Cluster1-vs-2", "Cluster2-vs-1"))
 rr.sum <- do.call(rbind, as.list(tapply(ddf$Ratio, ddf$Comp, summary)))
 cat("\nSummary of SL2:SL1 read ratio:\n")
 print(rr.sum)

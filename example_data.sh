@@ -30,4 +30,4 @@ time slidr.sh -g toy_data/GCF_000002985.6_WBcel235_genomic.fna.gz -a toy_data/GC
 
 # SLOPPR run
 #
-time sloppr.sh -g toy_data/GCF_000002985.6_WBcel235_genomic.fna.gz -a toy_data/GCF_000002985.6_WBcel235_genomic.gff.gz -s SL.fasta -S SL2.txt -o sloppr_toy_data -m libraries_config.txt
+time sloppr.sh -g toy_data/GCF_000002985.6_WBcel235_genomic.fna.gz -a toy_data/GCF_000002985.6_WBcel235_genomic.gff.gz -s SL.fasta -S SL2.txt -o sloppr_toy_data -m libraries_config.txt -F gene_name
